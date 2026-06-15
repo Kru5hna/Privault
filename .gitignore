@@ -5,3 +5,6 @@ target/
 # Added by cargo
 
 /target
+
+# Local Environment Variables
+.env
