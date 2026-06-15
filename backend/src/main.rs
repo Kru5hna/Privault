@@ -1,6 +1,6 @@
 mod error;
 
-use axum::{routing::get, Json, Router};
+use axum::{extract::State, routing::get, Json, Router};
 use error::AppError;
 use serde::Serialize;
 use std::net::SocketAddr;
@@ -13,12 +13,18 @@ struct HealthStatus {
     message: String,
 }
 
+// Shareable application state (similar to expressing config/db on app.locals)
+#[derive(Clone)]
+struct AppState {
+    db: sqlx::PgPool,
+}
+
 #[tokio::main]
 async fn main() {
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    // Initialize tracing/logging (similar to winston or pino in Node.js)
+    // Initialize tracing/logging
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -27,15 +33,31 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Initializing Privault backend skeleton...");
+    tracing::info!("Initializing Privault backend database and server...");
 
-    // Define CORS Layer (similar to cors middleware in Express)
+    // Get Database URL from environment
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
+
+    // Establish connection pool to Supabase Postgres (checks connection on startup)
+    let db_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .expect("Failed to connect to Supabase PostgreSQL");
+
+    tracing::info!("Successfully connected to database");
+
+    // Create AppState
+    let state = AppState { db: db_pool };
+
+    // Define CORS Layer
     let cors = CorsLayer::permissive();
 
-    // Setup routes
+    // Setup routes with shared State
     let app = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/test-error", get(test_error))
+        .with_state(state) // Share the database pool with handlers
         .layer(cors);
 
     // Bind Address
@@ -48,14 +70,18 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn health_check() -> Json<HealthStatus> {
-    Json(HealthStatus {
+async fn health_check(State(state): State<AppState>) -> Result<Json<HealthStatus>, AppError> {
+    // Perform a test query to verify connection to Supabase database
+    sqlx::query("SELECT 1")
+        .execute(&state.db)
+        .await?;
+
+    Ok(Json(HealthStatus {
         status: "OK".to_string(),
-        message: "Privault Backend is operational".to_string(),
-    })
+        message: "Privault Backend is operational and database connection is healthy".to_string(),
+    }))
 }
 
-async fn test_error() -> Result<Json<serde_json::Value>, AppError> {
-    // Simulate a user error (e.g. client validation failed)
+async fn test_error(State(_state): State<AppState>) -> Result<Json<serde_json::Value>, AppError> {
     Err(AppError::BadRequest("This is a simulated bad request error".to_string()))
 }
