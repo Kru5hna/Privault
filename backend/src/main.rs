@@ -1,4 +1,7 @@
+mod error;
+
 use axum::{routing::get, Json, Router};
+use error::AppError;
 use serde::Serialize;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
@@ -32,6 +35,7 @@ async fn main() {
     // Setup routes
     let app = Router::new()
         .route("/api/health", get(health_check))
+        .route("/api/test-error", get(test_error))
         .layer(cors);
 
     // Bind Address
@@ -49,4 +53,9 @@ async fn health_check() -> Json<HealthStatus> {
         status: "OK".to_string(),
         message: "Privault Backend is operational".to_string(),
     })
+}
+
+async fn test_error() -> Result<Json<serde_json::Value>, AppError> {
+    // Simulate a user error (e.g. client validation failed)
+    Err(AppError::BadRequest("This is a simulated bad request error".to_string()))
 }
