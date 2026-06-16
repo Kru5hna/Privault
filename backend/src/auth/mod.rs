@@ -1,5 +1,10 @@
-use axum::{extract::State, routing::post, Json, Router};
-use jsonwebtoken::{encode, Header, EncodingKey};
+use axum::{
+    extract::{FromRequestParts, State},
+    http::request::Parts,
+    routing::post,
+    Json, Router,
+};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -38,6 +43,64 @@ fn generate_token(user_id: &uuid::Uuid) -> Result<String, AppError> {
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to generate token: {}", e)))?;
 
     Ok(token)
+}
+
+// ── Auth Middleware Extractor ────────────────────────────────────────────
+// This is the Rust/Axum equivalent of Express's authMiddleware.
+// By implementing FromRequestParts for Claims, any handler that takes
+// `claims: Claims` as a parameter will automatically require a valid JWT.
+//
+// Express equivalent:
+//   function authMiddleware(req, res, next) {
+//       const token = req.headers.authorization?.split(' ')[1];
+//       const decoded = jwt.verify(token, secret);
+//       req.user = decoded;
+//       next();
+//   }
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for Claims
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        // 1. Get the Authorization header
+        let auth_header = parts
+            .headers
+            .get("Authorization")
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| {
+                AppError::Unauthorized("Missing Authorization header".to_string())
+            })?;
+
+        // 2. Strip the "Bearer " prefix to get the raw token
+        let token = auth_header
+            .strip_prefix("Bearer ")
+            .ok_or_else(|| {
+                AppError::Unauthorized("Invalid Authorization header format. Expected: Bearer <token>".to_string())
+            })?;
+
+        // 3. Load the secret and decode the token
+        let secret = std::env::var("JWT_SECRET")
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("JWT_SECRET not configured")))?;
+
+        let token_data = decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(secret.as_bytes()),
+            &Validation::default(), // Validates exp automatically
+        )
+        .map_err(|e| {
+            AppError::Unauthorized(format!("Invalid or expired token: {}", e))
+        })?;
+
+        // 4. Return the validated claims — Axum passes this to the handler
+        Ok(token_data.claims)
+    }
 }
 
 // ── Request Structs (What the frontend sends to us) ──────────────────────

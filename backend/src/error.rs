@@ -8,6 +8,7 @@ use serde_json::json;
 pub enum AppError {
     Database(String),
     BadRequest(String),
+    Unauthorized(String),
     NotFound(String),
     Internal(anyhow::Error),
 }
@@ -16,6 +17,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::Database(msg) => {
                 // Log database errors internally for debugging, but don't show full SQL to client

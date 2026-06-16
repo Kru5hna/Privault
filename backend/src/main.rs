@@ -65,6 +65,7 @@ async fn main() {
     let app = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/test-error", get(test_error))
+        .route("/api/me", get(get_me)) // Protected route — requires valid JWT
         .nest("/api/auth", auth::router()) // Register & Login routes
         .with_state(state) // Share the database pool with handlers
         .layer(cors);
@@ -93,4 +94,14 @@ async fn health_check(State(state): State<AppState>) -> Result<Json<HealthStatus
 
 async fn test_error(State(_state): State<AppState>) -> Result<Json<serde_json::Value>, AppError> {
     Err(AppError::BadRequest("This is a simulated bad request error".to_string()))
+}
+
+// Protected route — only runs if the JWT token is valid.
+// The `claims` parameter IS the middleware. If the token is missing/invalid,
+// Axum returns 401 automatically and this function never executes.
+async fn get_me(claims: auth::Claims) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "message": "You are authenticated!",
+        "user_id": claims.sub
+    }))
 }
