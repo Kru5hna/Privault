@@ -1,3 +1,4 @@
+mod auth;
 mod error;
 
 use axum::{extract::State, routing::get, Json, Router};
@@ -57,6 +58,7 @@ async fn main() {
     let app = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/test-error", get(test_error))
+        .nest("/api/auth", auth::router()) // Register & Login routes
         .with_state(state) // Share the database pool with handlers
         .layer(cors);
 
