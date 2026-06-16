@@ -1,8 +1,44 @@
 use axum::{extract::State, routing::post, Json, Router};
+use jsonwebtoken::{encode, Header, EncodingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
 use crate::error::AppError;
+
+// ── JWT Claims (the payload inside the token) ────────────────────────────
+// In JS you'd do: jwt.sign({ sub: userId }, secret, { expiresIn: '24h' })
+// In Rust, we define a struct for the payload so the compiler
+// knows exactly what fields exist — no dynamic key access.
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String,   // "subject" — the user's UUID
+    pub exp: usize,    // expiration time (unix timestamp)
+    pub iat: usize,    // issued at (unix timestamp)
+}
+
+/// Generate a signed JWT token for the given user_id.
+/// Reads JWT_SECRET from the environment.
+fn generate_token(user_id: &uuid::Uuid) -> Result<String, AppError> {
+    let secret = std::env::var("JWT_SECRET")
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("JWT_SECRET not configured")))?;
+
+    let now = chrono::Utc::now();
+    let claims = Claims {
+        sub: user_id.to_string(),
+        iat: now.timestamp() as usize,
+        exp: (now + chrono::Duration::hours(24)).timestamp() as usize,
+    };
+
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to generate token: {}", e)))?;
+
+    Ok(token)
+}
 
 // ── Request Structs (What the frontend sends to us) ──────────────────────
 
@@ -33,7 +69,7 @@ pub struct LoginResponse {
     pub message: String,
     pub user_id: String,
     pub wrapped_private_key: String,
-    // TODO: Add JWT token here in the next step
+    pub token: String,
 }
 
 // ── Auth Router (nested under /api/auth in main.rs) ──────────────────────
@@ -129,12 +165,15 @@ async fn login(
     let user_id: uuid::Uuid = row.get("id");
     let wrapped_private_key: String = row.get("wrapped_private_key");
 
+    // Generate a JWT token for this session
+    let token = generate_token(&user_id)?;
+
     tracing::info!("User logged in: {} ({})", payload.username, user_id);
 
     Ok(Json(LoginResponse {
         message: "Login successful".to_string(),
         user_id: user_id.to_string(),
         wrapped_private_key,
-        // TODO: Generate and return JWT token
+        token,
     }))
 }
