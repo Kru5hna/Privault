@@ -39,10 +39,17 @@ async fn main() {
     // Get Database URL from environment
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
 
-    // Establish connection pool to Supabase Postgres (checks connection on startup)
+    // Establish connection pool to Supabase Postgres
+    // We disable the prepared statement cache because Supabase uses PgBouncer
+    // in transaction mode, which does not support prepared statements.
     let db_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
-        .connect(&database_url)
+        .connect_with(
+            database_url
+                .parse::<sqlx::postgres::PgConnectOptions>()
+                .expect("Invalid DATABASE_URL format")
+                .statement_cache_capacity(0),
+        )
         .await
         .expect("Failed to connect to Supabase PostgreSQL");
 
