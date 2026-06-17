@@ -336,79 +336,101 @@ function FadeUp({
   );
 }
 
-// ── Shield SVG Component ────────────────────────────────────────────────
-function ShieldIcon() {
+// ── Document Constellation Component (Hero Visual) ──────────────────────
+const DOCUMENTS = [
+  { id: 1, name: "contract.pdf", meta: "2.3 MB · Encrypted", type: "PDF", x: 0, y: 0, rot: -4, hX: -70, hY: -80, hRot: -12, z: 50 },
+  { id: 2, name: "research-notes.docx", meta: "Updated 2h ago", type: "DOC", x: 12, y: 8, rot: 2, hX: 70, hY: -40, hRot: 10, z: 40 },
+  { id: 3, name: "startup-plan.pdf", meta: "Secure", type: "PDF", x: -8, y: 15, rot: -2, hX: -80, hY: 30, hRot: -5, z: 30 },
+  { id: 4, name: "financial-report.xlsx", meta: "1.1 MB", type: "XLS", x: 18, y: 22, rot: 6, hX: 80, hY: 60, hRot: 15, z: 20 },
+  { id: 5, name: "passport-scan.jpg", meta: "Encrypted", type: "IMG", x: -2, y: 30, rot: -1, hX: -30, hY: 100, hRot: -8, z: 10 },
+];
+
+function DocumentConstellation() {
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
-    <motion.svg
-      viewBox="0 0 200 240"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="w-full h-full animate-glow-pulse"
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 1.5, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+    <div 
+      className="relative w-[400px] h-[480px] flex items-center justify-center cursor-default"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Shield outline */}
-      <path
-        d="M100 10L20 50V110C20 170 60 210 100 230C140 210 180 170 180 110V50L100 10Z"
-        stroke="rgba(228, 22, 19, 0.4)"
-        strokeWidth="1.5"
-        fill="none"
+      {/* Central glowing core that intensifies on hover */}
+      <motion.div 
+        className="absolute w-32 h-32 rounded-full bg-[#E41613] blur-[80px]"
+        initial={false}
+        animate={{ opacity: isHovered ? 0.3 : 0.05, scale: isHovered ? 1.5 : 1 }}
+        transition={{ duration: 1, ease: "easeOut" }}
       />
-      <path
-        d="M100 25L35 58V110C35 162 68 197 100 215C132 197 165 162 165 110V58L100 25Z"
-        stroke="rgba(228, 22, 19, 0.2)"
-        strokeWidth="0.8"
-        fill="none"
-        strokeDasharray="4 6"
-      />
-      {/* Lock body */}
-      <rect
-        x="75"
-        y="105"
-        width="50"
-        height="40"
-        rx="4"
-        stroke="rgba(228, 22, 19, 0.6)"
-        strokeWidth="1.5"
-        fill="rgba(228, 22, 19, 0.05)"
-      />
-      {/* Lock shackle */}
-      <path
-        d="M82 105V90C82 78 90 70 100 70C110 70 118 78 118 90V105"
-        stroke="rgba(228, 22, 19, 0.5)"
-        strokeWidth="1.5"
-        fill="none"
-      />
-      {/* Keyhole */}
-      <circle cx="100" cy="120" r="5" fill="rgba(228, 22, 19, 0.4)" />
-      <rect
-        x="98"
-        y="122"
-        width="4"
-        height="12"
-        rx="2"
-        fill="rgba(228, 22, 19, 0.3)"
-      />
-      {/* Decorative circles */}
-      <circle
-        cx="100"
-        cy="120"
-        r="55"
-        stroke="rgba(228, 22, 19, 0.1)"
-        strokeWidth="0.5"
-        fill="none"
-        strokeDasharray="2 4"
-      />
-      <circle
-        cx="100"
-        cy="120"
-        r="70"
-        stroke="rgba(228, 22, 19, 0.07)"
-        strokeWidth="0.3"
-        fill="none"
-      />
-    </motion.svg>
+      
+      {/* Orbital rings */}
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 40, ease: "linear" }}
+      >
+        <div className="w-[320px] h-[320px] rounded-full border border-white/[0.04]" />
+      </motion.div>
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        animate={{ rotate: -360 }}
+        transition={{ repeat: Infinity, duration: 55, ease: "linear" }}
+      >
+        <div className="w-[420px] h-[420px] rounded-full border border-[#E41613]/[0.05] border-dashed" />
+      </motion.div>
+
+      {/* The Documents */}
+      {DOCUMENTS.map((doc, i) => (
+        <motion.div
+          key={doc.id}
+          className="absolute"
+          style={{ zIndex: doc.z }}
+          initial={false}
+          animate={isHovered ? "hover" : "idle"}
+          variants={{
+            idle: { x: doc.x, y: doc.y, rotate: doc.rot, scale: 1 },
+            hover: { x: doc.hX, y: doc.hY, rotate: doc.hRot, scale: 1.05 }
+          }}
+          transition={{ type: "spring", stiffness: 150, damping: 20, mass: 1 }}
+        >
+          <motion.div
+            animate={{ y: [-4, 4, -4] }}
+            transition={{ repeat: Infinity, duration: 4 + (i % 3), ease: "easeInOut", delay: i * 0.2 }}
+            className="w-40 h-52 bg-[#141414]/60 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col justify-between shadow-[0_16px_40px_rgba(0,0,0,0.5)] overflow-hidden relative group"
+          >
+            {/* Shimmer effect */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/[0.04] to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            
+            {/* Top Icon Area */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-7 h-7 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-white/60 tracking-wider">
+                {doc.type}
+              </div>
+              <div className="h-1.5 w-12 bg-white/10 rounded-full" />
+            </div>
+
+            {/* Fake Content Lines */}
+            <div className="flex-1 mt-6 space-y-2.5 opacity-30">
+              <div className="h-1 w-full bg-white/20 rounded-full" />
+              <div className="h-1 w-5/6 bg-white/20 rounded-full" />
+              <div className="h-1 w-4/6 bg-white/20 rounded-full" />
+              <div className="h-1 w-full bg-white/20 rounded-full mt-4" />
+              <div className="h-1 w-3/6 bg-white/20 rounded-full" />
+            </div>
+
+            {/* Bottom Info */}
+            <div className="relative mt-auto pt-3 border-t border-white/10">
+              <div className="text-[11px] font-medium text-white/90 truncate">{doc.name}</div>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                {doc.meta.includes("Encrypted") || doc.meta.includes("Secure") ? (
+                   <div className="w-1.5 h-1.5 rounded-full bg-[#E41613]" />
+                ) : null}
+                <div className="text-[9px] text-white/40">{doc.meta}</div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      ))}
+    </div>
   );
 }
 
@@ -535,8 +557,8 @@ export default function LandingPage() {
         </div>
 
         {/* Main hero content */}
-        <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-28 sm:px-6 sm:py-32 md:py-0">
-          <div className="grid min-h-[100svh] grid-cols-1 items-center gap-10 pt-20 sm:pt-24 lg:grid-cols-2 lg:gap-16">
+        <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 sm:py-32 md:py-0">
+          <div className="grid grid-cols-1 items-center gap-10 pt-16 sm:pt-24 lg:grid-cols-2 lg:gap-16">
             {/* Left: Text */}
             <motion.div style={{ y: heroTextY }}>
               <motion.p
@@ -545,26 +567,23 @@ export default function LandingPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.3 }}
               >
-                Zero-Knowledge Encrypted Vault
+                Private Document Vault
               </motion.p>
 
-              <h1 className="text-display text-[clamp(2.75rem,16vw,8rem)] sm:text-[clamp(3.5rem,9vw,8rem)] text-white mb-0">
+              <h1 className="text-display text-[clamp(2.75rem,16vw,8rem)] sm:text-[clamp(3.3rem,7vw,7rem)] text-white mb-0">
                 <RevealText delay={0.4}>
-                  <span className="block">Your</span>
+                  <span className="block">Your Files,</span>
                 </RevealText>
                 <RevealText delay={0.55}>
-                  <span className="block">Files,</span>
-                </RevealText>
-                <RevealText delay={0.7}>
                   <span className="block">
-                    Your{" "}
+                    Your <br /> {" "}
                     <span className="text-display-bold text-[#E41613] relative">
                       Rules
                       <motion.span
                         className="absolute -bottom-2 left-0 h-[3px] bg-[#E41613]"
                         initial={{ width: 0 }}
                         animate={{ width: "100%" }}
-                        transition={{ duration: 0.8, delay: 1.2, ease: [0.22, 1, 0.36, 1] }}
+                        transition={{ duration: 0.8, delay: 1.0, ease: [0.22, 1, 0.36, 1] }}
                       />
                     </span>
                   </span>
@@ -577,8 +596,8 @@ export default function LandingPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 1.0 }}
               >
-                Seal your documents with browser-native cryptography.
-                Not a single byte of plaintext ever leaves your machine.
+                Store private documents in a vault only you can unlock.
+                Simple, secure, and built so even we can&apos;t read your files.
               </motion.p>
 
               <motion.div
@@ -593,12 +612,12 @@ export default function LandingPage() {
                     className="btn-primary w-full sm:w-auto"
                   >
                     <span className="btn-bg" />
-                    <span className="btn-text">Access Vault Portal</span>
+                    <span className="btn-text">Create Vault</span>
                   </Link>
                 </MagneticButton>
 
                 <a href="#about" className="btn-outline w-full sm:w-auto">
-                  Discover Protocols
+                  See How It Works
                   <motion.span
                     className="inline-block"
                     animate={{ y: [0, 4, 0] }}
@@ -610,29 +629,12 @@ export default function LandingPage() {
               </motion.div>
             </motion.div>
 
-            {/* Right: Shield Visual */}
+            {/* Right: Document Constellation Visual */}
             <motion.div
               className="hidden lg:flex items-center justify-center"
               style={{ y: heroShieldY }}
             >
-              <div className="relative w-[400px] h-[480px]">
-                <ShieldIcon />
-                {/* Orbital rings */}
-                <motion.div
-                  className="absolute inset-0 flex items-center justify-center"
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 30, ease: "linear" }}
-                >
-                  <div className="w-[350px] h-[350px] rounded-full border border-white/[0.04]" />
-                </motion.div>
-                <motion.div
-                  className="absolute inset-0 flex items-center justify-center"
-                  animate={{ rotate: -360 }}
-                  transition={{ repeat: Infinity, duration: 45, ease: "linear" }}
-                >
-                  <div className="w-[420px] h-[420px] rounded-full border border-[#E41613]/[0.06] border-dashed" />
-                </motion.div>
-              </div>
+              <DocumentConstellation />
             </motion.div>
           </div>
         </div>
@@ -659,10 +661,10 @@ export default function LandingPage() {
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4 md:gap-12">
             {[
-              { value: 0, suffix: "", label: "Plaintext bytes leaked" },
-              { value: 100, suffix: "%", label: "Client-side crypto" },
-              { value: 256, suffix: "", label: "AES-GCM key bits" },
-              { value: 2048, suffix: "", label: "RSA wrapping bits" },
+              { value: 0, suffix: "", label: "Readable files stored by us" },
+              { value: 100, suffix: "%", label: "Locked before upload" },
+              { value: 256, suffix: "", label: "File protection strength" },
+              { value: 2048, suffix: "", label: "Vault key protection" },
             ].map((stat, i) => (
               <FadeUp key={stat.label} delay={i * 0.1}>
                 <div className="text-center md:text-left">
@@ -686,10 +688,10 @@ export default function LandingPage() {
       {/* ── ABOUT / MISSION SECTION ─────────────────────────────────── */}
       <section
         id="about"
-        className="relative py-20 sm:py-28 md:py-40 bg-[#0A0A0A] overflow-hidden dotted-grid-dark"
+        className="relative py-16 sm:py-28 md:py-40 bg-[#0A0A0A] overflow-hidden dotted-grid-dark"
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-16">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-16">
             {/* Left column: label + line */}
             <div className="lg:col-span-4">
               <FadeUp>
@@ -706,18 +708,18 @@ export default function LandingPage() {
                 <h2 className="text-display text-[clamp(2rem,4vw,3.5rem)] text-white/90 leading-[1.15]">
                   A secure workspace built on{" "}
                   <span className="text-[#E41613] italic font-serif font-normal">
-                    absolute privacy
+                    absolute privacy.
                   </span>{" "}
-                  and client-side processing. Your documents never touch our
+                  Only you can open what you store. Your documents never touch our
                   servers unencrypted.
                 </h2>
               </FadeUp>
               <FadeUp delay={0.35}>
                 <p className="mt-8 text-base text-white/40 font-light leading-relaxed max-w-xl">
-                  Founded in 2026, Privault utilizes standard 2048-bit RSA-OAEP
-                  and AES-256-GCM encryption directly within your browser engine.
-                  Keys are derived and managed locally — guaranteeing zero
-                  exposure to cloud breaches or unauthorized access.
+                  Founded in 2026, Privault was built so even we can't read your files.
+                  When you upload a document, it gets locked directly in your browser.
+                  Your private keys are managed locally on your device, ensuring total
+                  control and complete peace of mind.
                 </p>
               </FadeUp>
               <FadeUp delay={0.45}>
@@ -737,9 +739,9 @@ export default function LandingPage() {
       </section>
 
       {/* ── SPECS / METRICS SECTION ─────────────────────────────────── */}
-      <section id="metrics" className="relative py-20 sm:py-28 md:py-32 bg-[#111111] border-y border-white/5">
+      <section id="metrics" className="relative py-16 sm:py-28 md:py-32 bg-[#111111] border-y border-white/5">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-12 lg:gap-16">
+          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-16">
             {/* Left: Description */}
             <div className="lg:col-span-5">
               <FadeUp>
@@ -747,16 +749,16 @@ export default function LandingPage() {
               </FadeUp>
               <FadeUp delay={0.1}>
                 <h3 className="font-serif text-3xl md:text-4xl font-light text-white mb-6">
-                  Local Operations,
+                  Your Vault,
                   <br />
-                  <span className="text-[#E41613]">No Shared Secrets</span>
+                  <span className="text-[#E41613]">Your Keys</span>
                 </h3>
               </FadeUp>
               <FadeUp delay={0.2}>
                 <p className="text-sm text-white/40 font-light leading-relaxed mb-8">
-                  Every cryptographic operation happens inside your browser using
-                  the Web Crypto API. Your master password never leaves your device.
-                  We can&apos;t read your files — even if we wanted to.
+                  Every locking operation happens seamlessly inside your browser.
+                  Your master password never leaves your device, keeping you in complete
+                  control. It's private document storage that feels simple.
                 </p>
               </FadeUp>
               <FadeUp delay={0.3}>
@@ -773,21 +775,19 @@ export default function LandingPage() {
             <div className="lg:col-span-7">
               <div className="grid grid-cols-1 gap-[1px] bg-white/5 border border-white/5 overflow-hidden sm:grid-cols-2">
                 {[
-                  { number: "0", label: "Plaintext bytes leaked", desc: "Ever. By design." },
-                  { number: "100%", label: "Client-side crypto", desc: "Browser-native WebCrypto." },
-                  { number: "256", label: "AES-GCM key bits", desc: "Military-grade symmetric." },
-                  { number: "2048", label: "RSA wrapping bits", desc: "Asymmetric key exchange." },
-                ].map((metric, i) => (
-                  <FadeUp key={metric.label} delay={i * 0.12}>
-                    <div className="bg-[#111111] p-6 sm:p-8 md:p-10 hover:bg-white/[0.02] transition-colors duration-500 group">
-                      <div className="font-serif text-4xl md:text-5xl font-light text-[#E41613] group-hover:text-white transition-colors duration-500">
-                        {metric.number}
+                  { title: "No Server Access", desc: "Your files are locked before they leave your device. We couldn't read them even if we tried." },
+                  { title: "Local Cryptography", desc: "Everything runs directly in your browser. No extra software needed, just pure web standard security." },
+                  { title: "Military Grade", desc: "We use the same encryption standards trusted by governments and financial institutions worldwide." },
+                  { title: "Open & Auditable", desc: "Our cryptographic implementations use standard Web Crypto APIs that are built directly into your browser." },
+                ].map((feature, i) => (
+                  <FadeUp key={feature.title} delay={i * 0.12}>
+                    <div className="bg-[#111111] p-6 sm:p-8 md:p-10 hover:bg-white/[0.02] transition-colors duration-500 group h-full">
+                      <div className="h-2 w-2 rounded-full bg-[#E41613] mb-6 group-hover:scale-150 transition-transform duration-500" />
+                      <div className="font-serif text-xl font-light text-white mb-3 group-hover:text-[#E41613] transition-colors duration-500">
+                        {feature.title}
                       </div>
-                      <div className="text-micro text-white/40 mt-3">
-                        {metric.label}
-                      </div>
-                      <div className="text-xs text-white/20 mt-2 font-light">
-                        {metric.desc}
+                      <div className="text-sm text-white/40 font-light leading-relaxed">
+                        {feature.desc}
                       </div>
                     </div>
                   </FadeUp>
@@ -801,7 +801,7 @@ export default function LandingPage() {
       {/* ── STRATEGIES / FEATURES SECTION ───────────────────────────── */}
       <section
         id="features"
-        className="relative py-20 sm:py-28 md:py-40 bg-[#0A0A0A] overflow-hidden"
+        className="relative py-16 sm:py-28 md:py-40 bg-[#0A0A0A] overflow-hidden"
       >
         {/* Subtle background grid */}
         <div className="absolute inset-0 dotted-grid-dark opacity-60" />
@@ -815,8 +815,8 @@ export default function LandingPage() {
             </FadeUp>
             <FadeUp delay={0.1}>
               <h2 className="font-serif text-3xl md:text-5xl font-light text-white leading-tight">
-                Four layers of{" "}
-                <span className="italic text-[#E41613]">impenetrable</span>{" "}
+                Simple concepts,{" "}
+                <span className="italic text-[#E41613]">robust <br></br></span>{" "}
                 protection across all your documents.
               </h2>
             </FadeUp>
@@ -827,23 +827,23 @@ export default function LandingPage() {
             {[
               {
                 num: "01",
-                title: "Symmetric Seal",
-                desc: "Files are encrypted locally using 256-bit AES-GCM with unique random initialization vectors per file.",
+                title: "Pre-Upload Locks",
+                desc: "Your files are mathematically scrambled directly on your device before they even begin uploading.",
               },
               {
                 num: "02",
-                title: "Asymmetric Wrapping",
-                desc: "Each file's symmetric key is wrapped with your 2048-bit RSA-OAEP public key. Only your private key can unwrap.",
+                title: "Personal Key Set",
+                desc: "We generate a unique master key just for you. Every single file gets its own uncrackable lock, and only your key fits.",
               },
               {
                 num: "03",
-                title: "Zero-Knowledge Auth",
-                desc: "Authentication hashes and wrapped private keys are derived locally using PBKDF2. The server never learns your password.",
+                title: "Zero-Knowledge",
+                desc: "We never store your real password. We mathematically verify your identity without ever learning your secret.",
               },
               {
                 num: "04",
-                title: "Local Q&A Context",
-                desc: "Metadata search and semantic queries are processed entirely on your machine. No data exfiltration possible.",
+                title: "Complete Control",
+                desc: "Everything from searching to opening your documents happens privately on your screen. Nothing leaks.",
               },
             ].map((card, i) => (
               <FadeUp key={card.num} delay={i * 0.12}>
