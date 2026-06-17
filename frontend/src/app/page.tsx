@@ -633,6 +633,9 @@ export default function LandingPage() {
             <motion.div
               className="hidden lg:flex items-center justify-center"
               style={{ y: heroShieldY }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 1.2, delay: 1.0, ease: [0.22, 1, 0.36, 1] }}
             >
               <DocumentConstellation />
             </motion.div>
