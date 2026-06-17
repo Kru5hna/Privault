@@ -229,6 +229,7 @@ html.lenis, html.lenis body {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   overflow: hidden;
   border: 1px solid #ffffff;
   background: #ffffff;
@@ -267,6 +268,7 @@ html.lenis, html.lenis body {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.875rem 0;
   font-size: 0.6875rem;
@@ -281,4 +283,56 @@ html.lenis, html.lenis body {
 .btn-outline:hover {
   color: var(--crimson);
   border-bottom-color: var(--crimson);
+}
+
+@media (max-width: 639px) {
+  .text-brand {
+    letter-spacing: 0.22em;
+  }
+
+  .text-micro,
+  .text-label,
+  .btn-primary,
+  .btn-outline {
+    letter-spacing: 0.14em;
+  }
+
+  .btn-primary {
+    padding: 0.75rem 1rem;
+    font-size: 0.625rem;
+    line-height: 1.2;
+  }
+
+  .doc-table,
+  .doc-table tbody,
+  .doc-table tr,
+  .doc-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .doc-table tr {
+    border: 1px solid var(--border-light);
+    padding: 0.875rem;
+  }
+
+  .doc-table tr + tr {
+    margin-top: 0.75rem;
+  }
+
+  .doc-table td {
+    padding: 0.45rem 0;
+    text-align: left;
+  }
+
+  .doc-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
 }

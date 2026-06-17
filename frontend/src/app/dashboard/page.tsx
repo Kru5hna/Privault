@@ -255,7 +255,7 @@ export default function DashboardPage() {
     <div className="flex min-h-screen flex-col bg-[#F9FAFB] text-[#2B2B2B]">
       {/* Header Panel */}
       <header className="border-b border-[#E5E7EB] bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold tracking-[0.2em] text-[#2B2B2B]">
               PRIVAULT
@@ -263,8 +263,8 @@ export default function DashboardPage() {
             <span className="h-2 w-2 bg-[#E41613]"></span>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-xs">
+          <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-6">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-semibold uppercase tracking-wider text-gray-400">
                 Seal Status:
               </span>
@@ -274,10 +274,10 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <div className="h-4 w-px bg-gray-200"></div>
+            <div className="hidden h-4 w-px bg-gray-200 sm:block"></div>
 
-            <div className="flex items-center gap-4">
-              <span className="text-xs font-semibold uppercase tracking-widest text-[#2B2B2B]">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <span className="break-all text-xs font-semibold uppercase tracking-widest text-[#2B2B2B]">
                 Vault: {user.username}
               </span>
               <button
@@ -292,10 +292,10 @@ export default function DashboardPage() {
       </header>
 
       {/* Main Body */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         <div className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-light tracking-tight text-[#2B2B2B]">
+            <h1 className="text-2xl font-light tracking-tight text-[#2B2B2B] sm:text-3xl">
               Document Vault
             </h1>
             <p className="mt-1 text-sm text-gray-400">
@@ -305,7 +305,7 @@ export default function DashboardPage() {
 
           {/* Sandbox Indicator */}
           {isSandbox && (
-            <div className="inline-flex items-center gap-2 border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
+            <div className="inline-flex max-w-full items-center gap-2 border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-600 animate-pulse"></span>
               <span className="font-semibold uppercase tracking-wider">
                 In-Memory Sandbox Mode
@@ -319,7 +319,7 @@ export default function DashboardPage() {
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className="group relative mb-8 flex h-32 cursor-pointer flex-col items-center justify-center border border-dashed border-gray-200 bg-white transition-colors hover:border-[#E41613] hover:bg-red-50/10"
+          className="group relative mb-8 flex min-h-36 cursor-pointer flex-col items-center justify-center border border-dashed border-gray-200 bg-white px-4 py-6 transition-colors hover:border-[#E41613] hover:bg-red-50/10 sm:h-32 sm:min-h-0"
         >
           <input
             ref={fileInputRef}
@@ -328,7 +328,7 @@ export default function DashboardPage() {
             className="hidden"
           />
           {uploading ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 text-center">
               <svg
                 className="h-5 w-5 animate-spin text-[#E41613]"
                 fill="none"
@@ -363,14 +363,14 @@ export default function DashboardPage() {
             </div>
           )}
           {uploadError && (
-            <p className="absolute bottom-2 text-xs font-semibold text-[#E41613]">
+            <p className="mt-3 text-center text-xs font-semibold text-[#E41613] sm:absolute sm:bottom-2">
               {uploadError}
             </p>
           )}
         </section>
 
         {/* Filter & Table Area */}
-        <section className="border border-[#E5E7EB] bg-white p-6 shadow-sm">
+        <section className="border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
           {/* Search bar */}
           <div className="mb-6">
             <input
@@ -392,9 +392,9 @@ export default function DashboardPage() {
               No secure documents found in this vault
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
+            <div>
+              <table className="doc-table w-full text-left text-sm">
+                <thead className="hidden sm:table-header-group">
                   <tr className="border-b border-[#E5E7EB] text-xs font-semibold uppercase tracking-wider text-gray-400">
                     <th className="pb-3 pr-4 font-semibold">Name</th>
                     <th className="pb-3 pr-4 font-semibold">Size</th>
@@ -404,8 +404,8 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {displayedDocs.map((doc) => (
-                    <tr key={doc.id} className="group hover:bg-gray-50/50">
-                      <td className="py-4 pr-4 font-medium text-[#2B2B2B]">
+                    <tr key={doc.id} className="group hover:bg-gray-50/50 sm:table-row">
+                      <td data-label="Name" className="py-4 pr-4 font-medium text-[#2B2B2B]">
                         <div className="flex items-center gap-2">
                           <svg
                             className="h-4 w-4 text-gray-300"
@@ -420,19 +420,19 @@ export default function DashboardPage() {
                               d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                             ></path>
                           </svg>
-                          <span className="truncate max-w-xs sm:max-w-md">
+                          <span className="min-w-0 break-all sm:truncate sm:max-w-md">
                             {doc.name}
                           </span>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-xs text-gray-400 font-mono">
+                      <td data-label="Size" className="py-4 pr-4 text-xs text-gray-400 font-mono">
                         {formatSize(doc.size)}
                       </td>
-                      <td className="py-4 pr-4 text-xs text-gray-400">
+                      <td data-label="Seal Date" className="py-4 pr-4 text-xs text-gray-400">
                         {formatDate(doc.created_at)}
                       </td>
-                      <td className="py-4 text-right">
-                        <div className="flex justify-end gap-4">
+                      <td data-label="Actions" className="py-4 text-right">
+                        <div className="flex flex-wrap justify-start gap-4 sm:justify-end">
                           <button
                             onClick={() => handleDownload(doc)}
                             className="text-xs font-semibold uppercase tracking-wider text-[#2B2B2B] hover:text-[#E41613] hover:underline underline-offset-4"

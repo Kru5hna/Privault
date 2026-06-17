@@ -39,8 +39,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F9FAFB] px-6 py-12">
-      <div className="w-full max-w-md border border-[#E5E7EB] bg-white p-10 shadow-sm">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F9FAFB] px-4 py-8 sm:px-6 sm:py-12">
+      <div className="w-full max-w-md border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-10">
         {/* Brand Logo Header */}
         <div className="mb-10 text-center">
           <div className="inline-flex items-center gap-2">
@@ -123,10 +123,10 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative flex w-full items-center justify-center border border-[#2B2B2B] bg-[#2B2B2B] py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#E41613] hover:border-[#E41613] disabled:opacity-50"
+              className="group relative flex w-full items-center justify-center border border-[#2B2B2B] bg-[#2B2B2B] px-3 py-3 text-center text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#E41613] hover:border-[#E41613] disabled:opacity-50"
             >
               {loading ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <svg
                     className="h-4 w-4 animate-spin text-white"
                     fill="none"
@@ -155,7 +155,7 @@ export default function RegisterPage() {
             <button
               type="button"
               onClick={enterSandbox}
-              className="mt-4 flex w-full items-center justify-center border border-dashed border-[#2B2B2B] py-3 text-sm font-semibold text-[#2B2B2B] hover:text-[#E41613] hover:border-[#E41613] transition-colors uppercase tracking-wider"
+              className="mt-4 flex w-full items-center justify-center border border-dashed border-[#2B2B2B] px-3 py-3 text-center text-sm font-semibold text-[#2B2B2B] hover:text-[#E41613] hover:border-[#E41613] transition-colors uppercase tracking-wider"
             >
               Try Offline Demo Sandbox
             </button>

@@ -455,16 +455,16 @@ export default function LandingPage() {
 
       {/* ── NAVIGATION ──────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0A0A0A]/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5">
           {/* Left: Micro label */}
           <div className="hidden md:block">
             <span className="text-micro text-[#999]">Secure Vault</span>
           </div>
 
           {/* Center: PRIVAULT brand */}
-          <Link href="/" className="absolute left-1/2 -translate-x-1/2">
+          <Link href="/" className="static shrink-0 sm:absolute sm:left-1/2 sm:-translate-x-1/2">
             <motion.span
-              className="text-brand text-xl md:text-2xl text-white hover:text-[#E41613] transition-colors duration-500"
+              className="text-brand text-base sm:text-xl md:text-2xl text-white hover:text-[#E41613] transition-colors duration-500"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
@@ -474,7 +474,7 @@ export default function LandingPage() {
           </Link>
 
           {/* Right: Auth Links */}
-          <div className="flex items-center gap-6">
+          <div className="flex shrink-0 items-center gap-3 sm:gap-6">
             {user ? (
               <>
                 <MagneticButton>
@@ -513,7 +513,7 @@ export default function LandingPage() {
       {/* ── HERO SECTION ────────────────────────────────────────────── */}
       <section
         ref={heroRef}
-        className="relative min-h-screen flex items-center overflow-hidden bg-[#0A0A0A]"
+        className="relative min-h-[100svh] flex items-center overflow-hidden bg-[#0A0A0A]"
       >
         {/* Particle Canvas Background */}
         <ParticleCanvas />
@@ -535,8 +535,8 @@ export default function LandingPage() {
         </div>
 
         {/* Main hero content */}
-        <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-32 md:py-0">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-screen pt-24">
+        <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-28 sm:px-6 sm:py-32 md:py-0">
+          <div className="grid min-h-[100svh] grid-cols-1 items-center gap-10 pt-20 sm:pt-24 lg:grid-cols-2 lg:gap-16">
             {/* Left: Text */}
             <motion.div style={{ y: heroTextY }}>
               <motion.p
@@ -548,7 +548,7 @@ export default function LandingPage() {
                 Zero-Knowledge Encrypted Vault
               </motion.p>
 
-              <h1 className="text-display text-[clamp(3.5rem,9vw,8rem)] text-white mb-0">
+              <h1 className="text-display text-[clamp(2.75rem,16vw,8rem)] sm:text-[clamp(3.5rem,9vw,8rem)] text-white mb-0">
                 <RevealText delay={0.4}>
                   <span className="block">Your</span>
                 </RevealText>
@@ -572,7 +572,7 @@ export default function LandingPage() {
               </h1>
 
               <motion.p
-                className="mt-8 max-w-md text-base md:text-lg text-white/50 font-light leading-relaxed"
+                className="mt-8 max-w-md text-sm sm:text-base md:text-lg text-white/50 font-light leading-relaxed"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 1.0 }}
@@ -582,7 +582,7 @@ export default function LandingPage() {
               </motion.p>
 
               <motion.div
-                className="mt-10 flex flex-wrap items-center gap-6"
+                className="mt-10 flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 1.2 }}
@@ -590,14 +590,14 @@ export default function LandingPage() {
                 <MagneticButton>
                   <Link
                     href={user ? "/dashboard" : "/register"}
-                    className="btn-primary"
+                    className="btn-primary w-full sm:w-auto"
                   >
                     <span className="btn-bg" />
                     <span className="btn-text">Access Vault Portal</span>
                   </Link>
                 </MagneticButton>
 
-                <a href="#about" className="btn-outline">
+                <a href="#about" className="btn-outline w-full sm:w-auto">
                   Discover Protocols
                   <motion.span
                     className="inline-block"
@@ -654,10 +654,10 @@ export default function LandingPage() {
       </section>
 
       {/* ── CRIMSON STATS BAND ──────────────────────────────────────── */}
-      <section className="relative bg-[#E41613] py-16 md:py-20 overflow-hidden">
+      <section className="relative bg-[#E41613] py-14 sm:py-16 md:py-20 overflow-hidden">
         <div className="noise-overlay absolute inset-0 pointer-events-none opacity-20" />
-        <div className="relative z-10 mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4 md:gap-12">
             {[
               { value: 0, suffix: "", label: "Plaintext bytes leaked" },
               { value: 100, suffix: "%", label: "Client-side crypto" },
@@ -686,10 +686,10 @@ export default function LandingPage() {
       {/* ── ABOUT / MISSION SECTION ─────────────────────────────────── */}
       <section
         id="about"
-        className="relative py-32 md:py-40 bg-[#0A0A0A] overflow-hidden dotted-grid-dark"
+        className="relative py-20 sm:py-28 md:py-40 bg-[#0A0A0A] overflow-hidden dotted-grid-dark"
       >
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-16">
             {/* Left column: label + line */}
             <div className="lg:col-span-4">
               <FadeUp>
@@ -737,9 +737,9 @@ export default function LandingPage() {
       </section>
 
       {/* ── SPECS / METRICS SECTION ─────────────────────────────────── */}
-      <section id="metrics" className="relative py-32 bg-[#111111] border-y border-white/5">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
+      <section id="metrics" className="relative py-20 sm:py-28 md:py-32 bg-[#111111] border-y border-white/5">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-12 lg:gap-16">
             {/* Left: Description */}
             <div className="lg:col-span-5">
               <FadeUp>
@@ -771,7 +771,7 @@ export default function LandingPage() {
 
             {/* Right: Metric Grid */}
             <div className="lg:col-span-7">
-              <div className="grid grid-cols-2 gap-[1px] bg-white/5 border border-white/5 overflow-hidden">
+              <div className="grid grid-cols-1 gap-[1px] bg-white/5 border border-white/5 overflow-hidden sm:grid-cols-2">
                 {[
                   { number: "0", label: "Plaintext bytes leaked", desc: "Ever. By design." },
                   { number: "100%", label: "Client-side crypto", desc: "Browser-native WebCrypto." },
@@ -779,7 +779,7 @@ export default function LandingPage() {
                   { number: "2048", label: "RSA wrapping bits", desc: "Asymmetric key exchange." },
                 ].map((metric, i) => (
                   <FadeUp key={metric.label} delay={i * 0.12}>
-                    <div className="bg-[#111111] p-8 md:p-10 hover:bg-white/[0.02] transition-colors duration-500 group">
+                    <div className="bg-[#111111] p-6 sm:p-8 md:p-10 hover:bg-white/[0.02] transition-colors duration-500 group">
                       <div className="font-serif text-4xl md:text-5xl font-light text-[#E41613] group-hover:text-white transition-colors duration-500">
                         {metric.number}
                       </div>
@@ -801,13 +801,13 @@ export default function LandingPage() {
       {/* ── STRATEGIES / FEATURES SECTION ───────────────────────────── */}
       <section
         id="features"
-        className="relative py-32 md:py-40 bg-[#0A0A0A] overflow-hidden"
+        className="relative py-20 sm:py-28 md:py-40 bg-[#0A0A0A] overflow-hidden"
       >
         {/* Subtle background grid */}
         <div className="absolute inset-0 dotted-grid-dark opacity-60" />
 
-        <div className="relative z-10 mx-auto max-w-7xl px-6">
-          <div className="mb-20 max-w-3xl">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="mb-12 max-w-3xl sm:mb-20">
             <FadeUp>
               <p className="text-label text-[#E41613] mb-4">
                 Cryptographic Strategies
@@ -848,7 +848,7 @@ export default function LandingPage() {
             ].map((card, i) => (
               <FadeUp key={card.num} delay={i * 0.12}>
                 <motion.div
-                  className="group relative border border-white/10 bg-white/[0.02] p-8 h-full transition-all duration-500 hover:border-[#E41613]/50 overflow-hidden"
+                  className="group relative border border-white/10 bg-white/[0.02] p-6 sm:p-8 h-full transition-all duration-500 hover:border-[#E41613]/50 overflow-hidden"
                   whileHover={{ y: -6, transition: { duration: 0.3 } }}
                 >
                   {/* Red accent bar on hover */}
@@ -880,7 +880,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA SECTION ─────────────────────────────────────────────── */}
-      <section className="relative py-32 md:py-40 bg-[#0A0A0A] border-t border-white/5 overflow-hidden">
+      <section className="relative py-20 sm:py-28 md:py-40 bg-[#0A0A0A] border-t border-white/5 overflow-hidden">
         {/* Large background text */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <span className="text-brand text-[15vw] text-white/[0.02] select-none whitespace-nowrap">
@@ -888,12 +888,12 @@ export default function LandingPage() {
           </span>
         </div>
 
-        <div className="relative z-10 mx-auto max-w-4xl px-6 text-center">
+        <div className="relative z-10 mx-auto max-w-4xl px-4 text-center sm:px-6">
           <FadeUp>
             <p className="text-label text-[#E41613] mb-6">Get Started</p>
           </FadeUp>
           <FadeUp delay={0.1}>
-            <h2 className="font-serif text-4xl md:text-6xl font-light text-white leading-tight mb-8">
+            <h2 className="font-serif text-3xl sm:text-4xl md:text-6xl font-light text-white leading-tight mb-8">
               Your privacy is not
               <br />
               <span className="italic text-[#E41613]">negotiable.</span>
@@ -906,11 +906,11 @@ export default function LandingPage() {
             </p>
           </FadeUp>
           <FadeUp delay={0.3}>
-            <div className="flex flex-wrap items-center justify-center gap-6">
+            <div className="flex flex-col items-stretch justify-center gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
               <MagneticButton>
                 <Link
                   href={user ? "/dashboard" : "/register"}
-                  className="btn-primary !px-10 !py-4"
+                  className="btn-primary w-full !py-4 sm:w-auto sm:!px-10"
                 >
                   <span className="btn-bg" />
                   <span className="btn-text">Create Your Vault</span>
@@ -918,7 +918,7 @@ export default function LandingPage() {
               </MagneticButton>
               <Link
                 href="/login"
-                className="btn-outline !text-white/40 border-white/10"
+                className="btn-outline w-full !text-white/40 border-white/10 sm:w-auto"
               >
                 Sign in to existing vault
               </Link>
@@ -929,7 +929,7 @@ export default function LandingPage() {
 
       {/* ── FOOTER ──────────────────────────────────────────────────── */}
       <footer className="bg-[#050505] border-t border-white/5 py-16">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 items-start">
             {/* Brand */}
             <div>
@@ -944,7 +944,7 @@ export default function LandingPage() {
             </div>
 
             {/* Links */}
-            <div className="flex gap-16">
+            <div className="flex flex-wrap gap-10 sm:gap-16">
               <div>
                 <p className="text-micro text-white/50 mb-4">Product</p>
                 <div className="flex flex-col gap-3">
@@ -989,9 +989,9 @@ export default function LandingPage() {
 
             {/* Badge */}
             <div className="flex md:justify-end">
-              <div className="border border-white/10 px-5 py-3 inline-flex items-center gap-3">
+              <div className="inline-flex max-w-full items-center gap-3 border border-white/10 px-4 py-3 sm:px-5">
                 <div className="h-2 w-2 rounded-full bg-[#22C55E] animate-pulse" />
-                <span className="text-micro text-white/40">
+                <span className="text-micro text-white/40 leading-relaxed">
                   E2EE Active · Zero Knowledge
                 </span>
               </div>
@@ -999,7 +999,7 @@ export default function LandingPage() {
           </div>
 
           {/* Bottom bar */}
-          <div className="mt-16 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="mt-16 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
             <div className="text-[10px] text-white/20 tracking-wider">
               © 2026 PRIVAULT. All rights reserved.
             </div>
