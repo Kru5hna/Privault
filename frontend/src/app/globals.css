@@ -28,6 +28,7 @@ body {
 
 html {
   scroll-behavior: smooth;
+  scrollbar-gutter: stable;
 }
 
 html.lenis, html.lenis body {
@@ -180,6 +181,11 @@ html.lenis, html.lenis body {
 }
 
 /* Noise texture overlay */
+.noise-overlay {
+  position: absolute;
+  overflow: hidden;
+}
+
 .noise-overlay::before {
   content: "";
   position: absolute;
@@ -347,11 +353,11 @@ html.lenis, html.lenis body {
 }
 
 .input-tactical {
-  background-color: #0D0E10;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #F5F5F0;
+  color: #0a0a0a;
   outline: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 0px;
@@ -363,19 +369,61 @@ html.lenis, html.lenis body {
 }
 
 .input-tactical::placeholder {
-  color: rgba(255, 255, 255, 0.25);
+  color: #9ca3af;
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .input-tactical:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
+  background-color: #f3f4f6;
+  color: #9ca3af;
 }
 
 /* Crimson focus wrapper for standard fields */
 .focus-crimson:focus {
   border-color: var(--crimson) !important;
   box-shadow: 0 0 12px rgba(228, 22, 19, 0.2) !important;
+}
+
+.btn-delete-tactical {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--crimson);
+  background: var(--crimson);
+  padding: 0.5rem 1.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #ffffff;
+  transition: color 0.3s ease;
+  border-radius: 0px;
+}
+
+.btn-delete-tactical .btn-bg {
+  position: absolute;
+  inset: 0;
+  background: #000000;
+  transform: translateX(-101%);
+  transition: transform 0.4s cubic-bezier(0.76, 0, 0.24, 1);
+  z-index: 0;
+}
+
+.btn-delete-tactical:hover .btn-bg {
+  transform: translateX(0);
+}
+
+.btn-delete-tactical:hover {
+  color: #ffffff;
+}
+
+.btn-delete-tactical .btn-text {
+  position: relative;
+  z-index: 1;
 }

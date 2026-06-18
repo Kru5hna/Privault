@@ -297,7 +297,7 @@ export default function DashboardPage() {
               </span>
               <button
                 onClick={logout}
-                className="text-xs font-semibold uppercase tracking-widest text-[#F5F5F0]/60 hover:text-[#E41613] hover:underline underline-offset-4 transition-colors cursor-pointer"
+                className="text-xs font-bold uppercase tracking-widest text-[#E41613] hover:text-white border border-[#E41613]/30 hover:border-[#E41613] px-3.5 py-1.5 transition-colors cursor-pointer"
               >
                 Sign Out
               </button>
@@ -399,7 +399,7 @@ export default function DashboardPage() {
               placeholder="Filter documents by name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full input-tactical py-2.5 text-xs font-semibold uppercase tracking-wider pl-10 focus-crimson"
+              className="w-full input-tactical py-2.5 text-xs font-semibold tracking-wider pl-10 focus-crimson"
             />
             <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -458,7 +458,7 @@ export default function DashboardPage() {
                         {formatDate(doc.created_at)}
                       </td>
                       <td data-label="Actions" className="py-4 text-right">
-                        <div className="flex flex-wrap justify-start gap-4 sm:justify-end items-center">
+                        <div className="flex flex-wrap justify-start gap-8 sm:justify-end items-center">
                           <button
                             onClick={() => handleDownload(doc)}
                             className="text-xs font-bold uppercase tracking-widest text-[#F5F5F0]/70 hover:text-white hover:underline underline-offset-4 decoration-[#E41613] decoration-2 transition-all cursor-pointer"
@@ -467,9 +467,10 @@ export default function DashboardPage() {
                           </button>
                           <button
                             onClick={() => handleDelete(doc.id)}
-                            className="text-xs font-bold uppercase tracking-widest text-white/30 hover:text-red-500 hover:bg-red-500/10 px-2.5 py-1 transition-all rounded-none cursor-pointer"
+                            className="btn-delete-tactical relative cursor-pointer"
                           >
-                            Delete
+                            <span className="btn-bg" />
+                            <span className="btn-text">Delete</span>
                           </button>
                         </div>
                       </td>
