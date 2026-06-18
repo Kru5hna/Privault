@@ -19,8 +19,18 @@ serde_json = "1.0"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-# Authentication
-jsonwebtoken = "9.3"
+# Authentication — Argon2id for server-side hashing of client auth verifiers
+argon2 = "0.5"
+
+# Cryptographic randomness for session token generation
+rand = "0.8"
+
+# Base64 encoding/decoding for token serialization
+base64 = "0.22"
+
+# SHA-256 for hashing session tokens before DB storage
+sha2 = "0.10"
+hex = "0.4"
 
 # Logging / Environment
 tracing = "0.1"
