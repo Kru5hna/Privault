@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { AuthProvider } from "@/app/context";
+import UnlockModal from "@/components/unlock-modal";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,8 +46,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <UnlockModal />
+        </AuthProvider>
       </body>
     </html>
   );
 }
+
