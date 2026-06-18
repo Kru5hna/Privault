@@ -41,24 +41,29 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F9FAFB] px-4 py-8 sm:px-6 sm:py-12">
-      <div className="w-full max-w-md border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-10">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-[#0D0E10] px-4 py-8 sm:px-6 sm:py-12 dotted-grid-dark overflow-hidden">
+      {/* Visual background details */}
+      <div className="noise-overlay absolute inset-0 pointer-events-none opacity-30" />
+      <div className="absolute top-1/4 left-1/4 h-72 w-72 rounded-full bg-[#E41613]/5 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 h-72 w-72 rounded-full bg-[#E41613]/5 blur-[120px] pointer-events-none" />
+
+      <div className="relative z-10 w-full max-w-md panel-card p-6 sm:p-10">
         {/* Brand Logo Header */}
         <div className="mb-10 text-center">
           <div className="inline-flex items-center gap-2">
-            <span className="text-xl font-bold tracking-[0.2em] text-[#2B2B2B]">
+            <span className="font-serif text-2xl font-bold tracking-[0.25em] text-[#F5F5F0]">
               PRIVAULT
             </span>
-            <span className="h-2 w-2 bg-[#E41613]"></span>
+            <span className="h-2 w-2 rounded-full bg-[#E41613] animate-pulse"></span>
           </div>
-          <p className="mt-2 text-xs uppercase tracking-widest text-gray-400">
+          <p className="mt-3 text-micro text-white/30">
             Create Encrypted Vault
           </p>
         </div>
 
         {/* Errors */}
         {(formError || error) && (
-          <div className="mb-6 border-l-2 border-[#E41613] bg-red-50 p-4 text-sm text-[#E41613]">
+          <div className="mb-6 border-l-2 border-[#E41613] bg-[#E41613]/10 p-4 text-xs tracking-wider uppercase text-[#F5F5F0]">
             {formError || error}
           </div>
         )}
@@ -67,7 +72,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="register-username"
-              className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
+              className="block text-micro font-semibold text-white/50 mb-2"
             >
               Username
             </label>
@@ -78,7 +83,7 @@ export default function RegisterPage() {
               disabled={loading}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="mt-2 w-full border-b border-gray-200 py-2 text-sm text-[#2B2B2B] outline-none transition-colors placeholder:text-gray-300 focus:border-[#E41613]"
+              className="w-full input-tactical"
               placeholder="Enter username"
             />
           </div>
@@ -86,7 +91,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="register-password"
-              className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
+              className="block text-micro font-semibold text-white/50 mb-2"
             >
               Master Password
             </label>
@@ -97,7 +102,7 @@ export default function RegisterPage() {
               disabled={loading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-2 w-full border-b border-gray-200 py-2 text-sm text-[#2B2B2B] outline-none transition-colors placeholder:text-gray-300 focus:border-[#E41613]"
+              className="w-full input-tactical"
               placeholder="Min. 8 characters"
             />
           </div>
@@ -105,7 +110,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="register-confirm-password"
-              className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
+              className="block text-micro font-semibold text-white/50 mb-2"
             >
               Confirm Master Password
             </label>
@@ -116,7 +121,7 @@ export default function RegisterPage() {
               disabled={loading}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="mt-2 w-full border-b border-gray-200 py-2 text-sm text-[#2B2B2B] outline-none transition-colors placeholder:text-gray-300 focus:border-[#E41613]"
+              className="w-full input-tactical"
               placeholder="Confirm password"
             />
           </div>
@@ -125,50 +130,54 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative flex w-full items-center justify-center border border-[#2B2B2B] bg-[#2B2B2B] px-3 py-3 text-center text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#E41613] hover:border-[#E41613] disabled:opacity-50"
+              className="btn-primary w-full border-none cursor-pointer disabled:opacity-50"
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg
-                    className="h-4 w-4 animate-spin text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  GENERATING KEYS &amp; REGISTERING...
-                </span>
-              ) : (
-                <span className="tracking-widest uppercase">Register Vault</span>
-              )}
+              <span className="btn-bg" />
+              <span className="btn-text flex items-center justify-center gap-2">
+                {loading ? (
+                  <>
+                    <svg
+                      className="h-4 w-4 animate-spin text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    GENERATING KEYS &amp; REGISTERING...
+                  </>
+                ) : (
+                  "REGISTER VAULT"
+                )}
+              </span>
             </button>
+
             <button
               type="button"
               onClick={enterSandbox}
-              className="mt-4 flex w-full items-center justify-center border border-dashed border-[#2B2B2B] px-3 py-3 text-center text-sm font-semibold text-[#2B2B2B] hover:text-[#E41613] hover:border-[#E41613] transition-colors uppercase tracking-wider"
+              className="mt-4 flex w-full items-center justify-center border border-dashed border-white/20 bg-transparent px-3 py-3 text-center text-xs font-semibold text-white/60 hover:text-white hover:border-[#E41613] transition-colors uppercase tracking-widest cursor-pointer"
             >
               Try Offline Demo Sandbox
             </button>
           </div>
         </form>
 
-        <div className="mt-8 text-center text-xs text-gray-500">
+        <div className="mt-8 text-center text-xs text-white/40">
           Already have a vault?{" "}
           <Link
             href="/login"
-            className="font-semibold text-[#2B2B2B] underline decoration-gray-300 underline-offset-4 hover:text-[#E41613] hover:decoration-[#E41613]"
+            className="font-semibold text-white underline decoration-white/20 underline-offset-4 hover:text-[#E41613] hover:decoration-[#E41613] transition-colors"
           >
             Access Vault
           </Link>

@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0D0E10;
+  --foreground: #F5F5F0;
   --crimson: #E41613;
   --charcoal: #0A0A0A;
   --off-white: #F5F5F0;
-  --muted: #999999;
-  --border-light: #E5E7EB;
+  --muted: #8E919A;
+  --border-light: rgba(255, 255, 255, 0.06);
   --border-dark: #222222;
 }
 
@@ -335,4 +335,47 @@ html.lenis, html.lenis body {
     text-transform: uppercase;
     color: #9ca3af;
   }
+}
+
+/* ── Tactical Redesign Classes ───────────────────────────── */
+
+.panel-card {
+  background-color: #15161A;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.input-tactical {
+  background-color: #0D0E10;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #F5F5F0;
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0px;
+}
+
+.input-tactical:focus {
+  border-color: var(--crimson);
+  box-shadow: 0 0 12px rgba(228, 22, 19, 0.2);
+}
+
+.input-tactical::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.input-tactical:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Crimson focus wrapper for standard fields */
+.focus-crimson:focus {
+  border-color: var(--crimson) !important;
+  box-shadow: 0 0 12px rgba(228, 22, 19, 0.2) !important;
 }

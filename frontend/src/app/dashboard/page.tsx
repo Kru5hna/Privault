@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -102,10 +103,10 @@ export default function DashboardPage() {
 
   if (authLoading || !user || !privateKey) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB]">
+      <div className="flex min-h-screen items-center justify-center bg-[#0D0E10] text-[#F5F5F0]">
         <div className="text-center">
           <div className="inline-flex items-center gap-2">
-            <span className="text-sm font-bold tracking-[0.2em] text-[#2B2B2B] animate-pulse">
+            <span className="text-xs font-bold tracking-[0.25em] text-white/50 animate-pulse">
               LOADING PRIVAULT SECURE CONTEXT
             </span>
           </div>
@@ -171,8 +172,19 @@ export default function DashboardPage() {
     e.preventDefault();
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
+    setIsDragActive(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(false);
+  };
+
+  const handleDropWithState = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFileUpload(e.dataTransfer.files[0]);
     }
@@ -253,37 +265,39 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F9FAFB] text-[#2B2B2B]">
+    <div className="flex min-h-screen flex-col bg-[#0D0E10] text-[#F5F5F0] dotted-grid-dark relative">
+      <div className="noise-overlay absolute inset-0 pointer-events-none opacity-20" />
+
       {/* Header Panel */}
-      <header className="border-b border-[#E5E7EB] bg-white">
+      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#15161A]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold tracking-[0.2em] text-[#2B2B2B]">
+            <span className="font-serif text-xl font-bold tracking-[0.25em] text-[#F5F5F0]">
               PRIVAULT
             </span>
-            <span className="h-2 w-2 bg-[#E41613]"></span>
+            <span className="h-2 w-2 rounded-full bg-[#E41613] animate-pulse"></span>
           </div>
 
           <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-6">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-semibold uppercase tracking-wider text-gray-400">
+              <span className="font-semibold uppercase tracking-wider text-white/30">
                 Seal Status:
               </span>
-              <span className="inline-flex items-center gap-1.5 font-bold text-green-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-600"></span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse"></span>
                 E2EE ACTIVE
               </span>
             </div>
 
-            <div className="hidden h-4 w-px bg-gray-200 sm:block"></div>
+            <div className="hidden h-4 w-px bg-white/10 sm:block"></div>
 
             <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-              <span className="break-all text-xs font-semibold uppercase tracking-widest text-[#2B2B2B]">
+              <span className="break-all text-xs font-semibold uppercase tracking-widest text-white/70 bg-white/5 border border-white/10 px-3 py-1.5">
                 Vault: {user.username}
               </span>
               <button
                 onClick={logout}
-                className="text-xs font-semibold uppercase tracking-wider text-[#2B2B2B] hover:text-[#E41613] hover:underline underline-offset-4"
+                className="text-xs font-semibold uppercase tracking-widest text-[#F5F5F0]/60 hover:text-[#E41613] hover:underline underline-offset-4 transition-colors cursor-pointer"
               >
                 Sign Out
               </button>
@@ -293,21 +307,21 @@ export default function DashboardPage() {
       </header>
 
       {/* Main Body */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+      <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         <div className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-light tracking-tight text-[#2B2B2B] sm:text-3xl">
+            <h1 className="font-serif text-2xl font-light tracking-wide text-white sm:text-3xl">
               Document Vault
             </h1>
-            <p className="mt-1 text-sm text-gray-400">
-              Zero-knowledge E2EE document storage. Decryption keys exist only in your browser.
+            <p className="mt-2 text-xs text-white/40 tracking-wider">
+              ZERO-KNOWLEDGE E2EE STORAGE. DECRYPTION KEYS EXIST ONLY IN YOUR BROWSER.
             </p>
           </div>
 
           {/* Sandbox Indicator */}
           {isSandbox && (
-            <div className="inline-flex max-w-full items-center gap-2 border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+            <div className="inline-flex max-w-full items-center gap-2 border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
               <span className="font-semibold uppercase tracking-wider">
                 In-Memory Sandbox Mode
               </span>
@@ -318,9 +332,15 @@ export default function DashboardPage() {
         {/* Drag & Drop File Upload Panel */}
         <section
           onDragOver={handleDragOver}
-          onDrop={handleDrop}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDropWithState}
           onClick={() => fileInputRef.current?.click()}
-          className="group relative mb-8 flex min-h-36 cursor-pointer flex-col items-center justify-center border border-dashed border-gray-200 bg-white px-4 py-6 transition-colors hover:border-[#E41613] hover:bg-red-50/10 sm:h-32 sm:min-h-0"
+          className={`group relative mb-8 flex min-h-36 cursor-pointer flex-col items-center justify-center border border-dashed transition-all duration-300 rounded-none ${
+            isDragActive
+              ? "border-[#E41613] bg-[#E41613]/5 scale-[0.99] shadow-[0_0_24px_rgba(228,22,19,0.15)]"
+              : "border-white/10 bg-[#15161A] hover:border-[#E41613] hover:bg-white/[0.01]"
+          }`}
         >
           <input
             ref={fileInputRef}
@@ -329,9 +349,9 @@ export default function DashboardPage() {
             className="hidden"
           />
           {uploading ? (
-            <div className="flex flex-wrap items-center justify-center gap-2 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 text-center">
               <svg
-                className="h-5 w-5 animate-spin text-[#E41613]"
+                className="h-6 w-6 animate-spin text-[#E41613]"
                 fill="none"
                 viewBox="0 0 24 24"
               >
@@ -349,17 +369,17 @@ export default function DashboardPage() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              <span className="text-xs font-semibold uppercase tracking-wider">
+              <span className="text-micro font-bold tracking-[0.2em] text-[#E41613]">
                 ENCRYPTING & UPLOADING FILE...
               </span>
             </div>
           ) : (
-            <div className="text-center">
-              <p className="text-sm font-semibold uppercase tracking-wider text-gray-400 group-hover:text-[#E41613]">
+            <div className="text-center p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60 group-hover:text-white transition-colors duration-300">
                 Drag files here or click to browse
               </p>
-              <p className="mt-1 text-xs text-gray-300">
-                Files are AES-GCM encrypted in the browser before leaving your machine
+              <p className="mt-2 text-xs text-white/30 tracking-wide">
+                Files are AES-256-GCM encrypted in the browser before leaving your machine
               </p>
             </div>
           )}
@@ -371,45 +391,50 @@ export default function DashboardPage() {
         </section>
 
         {/* Filter & Table Area */}
-        <section className="border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
+        <section className="panel-card p-4 sm:p-8">
           {/* Search bar */}
-          <div className="mb-6">
+          <div className="mb-6 relative">
             <input
               type="text"
-              placeholder="FILTER DOCUMENTS BY NAME..."
+              placeholder="Filter documents by name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full border-b border-gray-200 py-2 text-xs uppercase tracking-wider outline-none focus:border-[#E41613] placeholder:text-gray-300"
+              className="w-full input-tactical py-2.5 text-xs font-semibold uppercase tracking-wider pl-10 focus-crimson"
             />
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
           </div>
 
           {/* Documents Table */}
           {loadingDocs ? (
-            <div className="py-12 text-center text-xs text-gray-400">
+            <div className="py-16 text-center text-xs tracking-widest uppercase text-white/30 animate-pulse">
               LOADING ENCRYPTED METADATA...
             </div>
           ) : displayedDocs.length === 0 ? (
-            <div className="py-12 text-center text-xs tracking-wider uppercase text-gray-300">
+            <div className="py-16 text-center text-xs tracking-widest uppercase text-white/20">
               No secure documents found in this vault
             </div>
           ) : (
             <div>
-              <table className="doc-table w-full text-left text-sm">
+              <table className="doc-table w-full text-left text-sm border-collapse">
                 <thead className="hidden sm:table-header-group">
-                  <tr className="border-b border-[#E5E7EB] text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    <th className="pb-3 pr-4 font-semibold">Name</th>
-                    <th className="pb-3 pr-4 font-semibold">Size</th>
-                    <th className="pb-3 pr-4 font-semibold">Seal Date</th>
-                    <th className="pb-3 text-right font-semibold">Actions</th>
+                  <tr className="border-b border-white/5 text-micro font-semibold text-white/40 tracking-[0.2em]">
+                    <th className="pb-4 pr-4 font-bold">Name</th>
+                    <th className="pb-4 pr-4 font-bold">Size</th>
+                    <th className="pb-4 pr-4 font-bold">Seal Date</th>
+                    <th className="pb-4 text-right font-bold">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-white/5">
                   {displayedDocs.map((doc) => (
-                    <tr key={doc.id} className="group hover:bg-gray-50/50 sm:table-row">
-                      <td data-label="Name" className="py-4 pr-4 font-medium text-[#2B2B2B]">
-                        <div className="flex items-center gap-2">
+                    <tr key={doc.id} className="group border-b border-white/[0.02] last:border-b-0 hover:bg-white/[0.01] transition-colors sm:table-row">
+                      <td data-label="Name" className="py-4 pr-4 text-sm text-white/95">
+                        <div className="flex items-center gap-3">
                           <svg
-                            className="h-4 w-4 text-gray-300"
+                            className="h-4 w-4 text-[#E41613] shrink-0"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="2"
@@ -421,28 +446,28 @@ export default function DashboardPage() {
                               d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                             ></path>
                           </svg>
-                          <span className="min-w-0 break-all sm:truncate sm:max-w-md">
+                          <span className="min-w-0 break-all sm:truncate sm:max-w-md font-medium">
                             {doc.name}
                           </span>
                         </div>
                       </td>
-                      <td data-label="Size" className="py-4 pr-4 text-xs text-gray-400 font-mono">
+                      <td data-label="Size" className="py-4 pr-4 text-xs text-white/40 font-mono">
                         {formatSize(doc.size)}
                       </td>
-                      <td data-label="Seal Date" className="py-4 pr-4 text-xs text-gray-400">
+                      <td data-label="Seal Date" className="py-4 pr-4 text-xs text-white/40">
                         {formatDate(doc.created_at)}
                       </td>
                       <td data-label="Actions" className="py-4 text-right">
-                        <div className="flex flex-wrap justify-start gap-4 sm:justify-end">
+                        <div className="flex flex-wrap justify-start gap-4 sm:justify-end items-center">
                           <button
                             onClick={() => handleDownload(doc)}
-                            className="text-xs font-semibold uppercase tracking-wider text-[#2B2B2B] hover:text-[#E41613] hover:underline underline-offset-4"
+                            className="text-xs font-bold uppercase tracking-widest text-[#F5F5F0]/70 hover:text-white hover:underline underline-offset-4 decoration-[#E41613] decoration-2 transition-all cursor-pointer"
                           >
                             Download & Decrypt
                           </button>
                           <button
                             onClick={() => handleDelete(doc.id)}
-                            className="text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-red-600"
+                            className="text-xs font-bold uppercase tracking-widest text-white/30 hover:text-red-500 hover:bg-red-500/10 px-2.5 py-1 transition-all rounded-none cursor-pointer"
                           >
                             Delete
                           </button>
