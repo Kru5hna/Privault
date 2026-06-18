@@ -1,16 +1,31 @@
 /**
- * Client-side End-to-End Encryption (E2EE) engine for Privault
- * Utilizes the browser's built-in Web Crypto API (window.crypto.subtle)
+ * Client-side End-to-End Encryption (E2EE) engine for Privault.
+ *
+ * All encryption and key derivation happens here in the browser.
+ * The server NEVER sees plaintext passwords, private keys, or file contents.
+ *
+ * Architecture:
+ *   Password + auth_salt  →  PBKDF2  →  SHA-256  →  auth_verifier (sent to server)
+ *   Password + kek_salt   →  PBKDF2  →  KEK (AES-GCM-256, non-extractable, stays in memory)
+ *   KEK + IV              →  wraps RSA Private Key  →  wrapped_private_key (stored on server)
+ *   RSA Public Key        →  wraps per-file DEKs    →  encrypted_dek (stored on server)
  */
 
-// Converter: ArrayBuffer or Uint8Array -> Base64 string
+// ─────────────────────────────────────────────────────────────────────────────
+// Base64 Converters
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Convert an ArrayBuffer or Uint8Array to a Base64 string */
 export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  const binary = String.fromCharCode(...bytes);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
   return window.btoa(binary);
 }
 
-// Converter: Base64 string -> Uint8Array
+/** Convert a Base64 string to a Uint8Array */
 export function base64ToUint8Array(base64: string): Uint8Array {
   const binaryString = window.atob(base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -20,73 +35,104 @@ export function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-// Generate a deterministic salt based on the username to ensure uniqueness across users
-export async function getSalt(username: string): Promise<Uint8Array> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(username.toLowerCase() + "_privault_salt_constant");
-  const hash = await window.crypto.subtle.digest("SHA-256", data);
-  return new Uint8Array(hash);
+// ─────────────────────────────────────────────────────────────────────────────
+// Salt Generation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Generate a cryptographically random 32-byte salt, returned as Base64 */
+export function generateSalt(): string {
+  const salt = window.crypto.getRandomValues(new Uint8Array(32));
+  return arrayBufferToBase64(salt);
 }
 
-/**
- * Derives the auth_hash (for server login) and the KEK (for wrapping the private key)
- * from the user's master password and username.
- */
-export async function deriveCredentials(
-  username: string,
-  password: string
-): Promise<{ KEK: CryptoKey; authHash: string }> {
-  const encoder = new TextEncoder();
-  const passwordBuffer = encoder.encode(password);
-  const salt = await getSalt(username);
+// ─────────────────────────────────────────────────────────────────────────────
+// Key Derivation — Split into two independent derivations
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // Import the raw password as a PBKDF2 base key
+/**
+ * Derive the auth verifier from password + auth_salt.
+ *
+ * This is a hex string that gets sent to the server for authentication.
+ * The server then hashes it again with Argon2id before storing it.
+ *
+ * Flow: password → PBKDF2(salt=auth_salt) → 256 bits → SHA-256 → hex string
+ */
+export async function deriveAuthVerifier(
+  password: string,
+  authSaltBase64: string
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const salt = base64ToUint8Array(authSaltBase64);
+
   const baseKey = await window.crypto.subtle.importKey(
     "raw",
-    passwordBuffer,
+    encoder.encode(password),
     { name: "PBKDF2" },
     false,
-    ["deriveKey", "deriveBits"]
+    ["deriveBits"]
   );
 
-  // Derive the Key Encryption Key (KEK) for private key wrapping (AES-GCM-256)
-  const KEK = await window.crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: salt as any,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false, // Non-extractable for memory safety
-    ["wrapKey", "unwrapKey", "encrypt", "decrypt"]
-  );
-
-  // Derive bits for the auth_hash (256 bits = 32 bytes)
   const authBits = await window.crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
-      salt: salt as any,
-      iterations: 100000,
+      salt: salt as BufferSource,
+      iterations: 100_000,
       hash: "SHA-256",
     },
     baseKey,
     256
   );
 
-  // Hash the derived bits to get a final secure auth_hash hex string
-  const authHashBuffer = await window.crypto.subtle.digest("SHA-256", authBits);
-  const authHash = Array.from(new Uint8Array(authHashBuffer))
+  // Hash the derived bits to produce the final verifier
+  const hashBuffer = await window.crypto.subtle.digest("SHA-256", authBits);
+  return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-
-  return { KEK, authHash };
 }
 
 /**
- * Generates an asymmetric RSA-OAEP 2048 keypair for document key wrapping
+ * Derive the Key Encryption Key (KEK) from password + kek_salt.
+ *
+ * The KEK is an AES-GCM-256 key used to wrap/unwrap the user's RSA private key.
+ * It is NON-EXTRACTABLE — it can never be exported from memory, only used for
+ * wrapKey/unwrapKey operations. This prevents accidental leakage.
+ *
+ * Flow: password → PBKDF2(salt=kek_salt) → AES-GCM-256 CryptoKey (non-extractable)
  */
+export async function deriveKEK(
+  password: string,
+  kekSaltBase64: string
+): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const salt = base64ToUint8Array(kekSaltBase64);
+
+  const baseKey = await window.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+
+  return window.crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: salt as BufferSource,
+      iterations: 100_000,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false, // ← Non-extractable! This is critical for security.
+    ["wrapKey", "unwrapKey"]
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RSA Keypair Operations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Generate an RSA-OAEP 2048-bit keypair for document key wrapping */
 export async function generateRSAKeyPair(): Promise<CryptoKeyPair> {
   return window.crypto.subtle.generateKey(
     {
@@ -95,37 +141,34 @@ export async function generateRSAKeyPair(): Promise<CryptoKeyPair> {
       publicExponent: new Uint8Array([1, 0, 1]), // 65537
       hash: "SHA-256",
     },
-    true, // Extractable so we can export the public key and wrap the private key
+    true, // Extractable — we need to export public key and wrap private key
     ["encrypt", "decrypt", "wrapKey", "unwrapKey"]
   );
 }
 
-/**
- * Exports the RSA public key to base64 SPKI string format
- */
+/** Export RSA public key to base64-encoded SPKI format */
 export async function exportPublicKey(key: CryptoKey): Promise<string> {
   const exported = await window.crypto.subtle.exportKey("spki", key);
   return arrayBufferToBase64(exported);
 }
 
-/**
- * Imports the RSA public key from a base64 SPKI string format
- */
+/** Import RSA public key from base64-encoded SPKI format */
 export async function importPublicKey(spkiBase64: string): Promise<CryptoKey> {
   const keyBytes = base64ToUint8Array(spkiBase64);
   return window.crypto.subtle.importKey(
     "spki",
-    keyBytes as any,
+    keyBytes as BufferSource,
     { name: "RSA-OAEP", hash: "SHA-256" },
     true,
     ["encrypt", "wrapKey"]
   );
 }
 
-/**
- * Wraps (encrypts) the user's RSA private key using their password-derived KEK
- * Returns the wrapped key in base64 along with the initialization vector (IV)
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Private Key Wrapping / Unwrapping
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Wrap (encrypt) the RSA private key with the KEK using AES-GCM */
 export async function wrapPrivateKey(
   privateKey: CryptoKey,
   KEK: CryptoKey
@@ -135,7 +178,7 @@ export async function wrapPrivateKey(
     "pkcs8",
     privateKey,
     KEK,
-    { name: "AES-GCM", iv: iv as any }
+    { name: "AES-GCM", iv }
   );
 
   return {
@@ -144,9 +187,7 @@ export async function wrapPrivateKey(
   };
 }
 
-/**
- * Unwraps (decrypts) the user's RSA private key using their password-derived KEK
- */
+/** Unwrap (decrypt) the RSA private key with the KEK using AES-GCM */
 export async function unwrapPrivateKey(
   wrappedKeyBase64: string,
   ivBase64: string,
@@ -157,39 +198,44 @@ export async function unwrapPrivateKey(
 
   return window.crypto.subtle.unwrapKey(
     "pkcs8",
-    wrappedKey as any,
+    wrappedKey as BufferSource,
     KEK,
-    { name: "AES-GCM", iv: iv as any },
+    { name: "AES-GCM", iv: iv as BufferSource },
     { name: "RSA-OAEP", hash: "SHA-256" },
-    true, // Extractable in memory
+    true, // Extractable in memory (needed to derive public key from private)
     ["decrypt", "unwrapKey"]
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// File Encryption / Decryption
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Encrypts file bytes with a random AES-GCM DEK, and wraps the DEK with the user's RSA public key.
- * The output ciphertext buffer contains: [12-byte IV] + [encrypted file payload]
+ * Encrypt a file with a random per-file DEK, then wrap the DEK with the user's RSA public key.
+ *
+ * Output ciphertext format: [12-byte IV] + [AES-GCM encrypted payload]
  */
 export async function encryptFile(
   fileBytes: Uint8Array,
   rsaPublicKey: CryptoKey
 ): Promise<{ ciphertext: Uint8Array; encryptedDek: string }> {
-  // 1. Generate a single-use random AES-GCM-256 key (DEK)
+  // Generate a random AES-GCM-256 Data Encryption Key (DEK)
   const dek = await window.crypto.subtle.generateKey(
     { name: "AES-GCM", length: 256 },
-    true,
+    true, // Extractable — we need to wrap it with RSA
     ["encrypt", "decrypt"]
   );
 
-  // 2. Encrypt the file content
+  // Encrypt the file content with the DEK
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const encryptedFileBuffer = await window.crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv as any },
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
     dek,
-    fileBytes as any
+    fileBytes as BufferSource
   );
 
-  // 3. Wrap (encrypt) the DEK using the User's RSA Public Key
+  // Wrap the DEK with the user's RSA public key
   const wrappedDek = await window.crypto.subtle.wrapKey(
     "raw",
     dek,
@@ -197,10 +243,10 @@ export async function encryptFile(
     { name: "RSA-OAEP" }
   );
 
-  // 4. Prepend IV (12 bytes) to the encrypted payload for simple bundling
-  const combined = new Uint8Array(iv.length + encryptedFileBuffer.byteLength);
+  // Combine IV + ciphertext into a single buffer
+  const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
   combined.set(iv, 0);
-  combined.set(new Uint8Array(encryptedFileBuffer), iv.length);
+  combined.set(new Uint8Array(encryptedBuffer), iv.length);
 
   return {
     ciphertext: combined,
@@ -209,18 +255,19 @@ export async function encryptFile(
 }
 
 /**
- * Decrypts file bytes using the user's RSA private key to unwrap the DEK first.
+ * Decrypt a file by unwrapping the DEK with the user's RSA private key,
+ * then decrypting the file payload with the DEK.
  */
 export async function decryptFile(
   encryptedPayload: Uint8Array,
   encryptedDekBase64: string,
   rsaPrivateKey: CryptoKey
 ): Promise<Uint8Array> {
-  // 1. Unwrap the DEK using the Private Key
+  // Unwrap the DEK
   const wrappedDek = base64ToUint8Array(encryptedDekBase64);
   const dek = await window.crypto.subtle.unwrapKey(
     "raw",
-    wrappedDek as any,
+    wrappedDek as BufferSource,
     rsaPrivateKey,
     { name: "RSA-OAEP" },
     { name: "AES-GCM", length: 256 },
@@ -228,32 +275,36 @@ export async function decryptFile(
     ["decrypt"]
   );
 
-  // 2. Extract IV (first 12 bytes) and ciphertext
+  // Extract IV (first 12 bytes) and ciphertext from the payload
   const iv = encryptedPayload.slice(0, 12);
   const ciphertext = encryptedPayload.slice(12);
 
-  // 3. Decrypt the file bytes
+  // Decrypt
   const decrypted = await window.crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv as any },
+    { name: "AES-GCM", iv },
     dek,
-    ciphertext as any
+    ciphertext as BufferSource
   );
 
   return new Uint8Array(decrypted);
 }
 
-/**
- * Derives the RSA public key from the RSA private key in-memory by exporting to JWK
- */
-export async function getPublicKeyFromPrivateKey(privateKey: CryptoKey): Promise<CryptoKey> {
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility — Derive public key from private key (for in-memory use)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Extract the RSA public key from an RSA private key via JWK round-trip */
+export async function getPublicKeyFromPrivateKey(
+  privateKey: CryptoKey
+): Promise<CryptoKey> {
   const jwk = await window.crypto.subtle.exportKey("jwk", privateKey);
   const publicKeyJwk = {
     kty: jwk.kty,
     n: jwk.n,
     e: jwk.e,
     alg: jwk.alg,
-    key_ops: ["encrypt"],
-    ext: true
+    key_ops: ["encrypt", "wrapKey"],
+    ext: true,
   };
   return window.crypto.subtle.importKey(
     "jwk",
