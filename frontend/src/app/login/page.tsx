@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useAuth } from "@/app/context";
 
 export default function LoginPage() {
-  const { login, error, loading, clearError, enterSandbox } = useAuth();
+  const { login, error, status, clearError, enterSandbox } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  const loading = status === "loading";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +24,7 @@ export default function LoginPage() {
 
     try {
       await login(username.trim(), password);
-    } catch (err) {
+    } catch {
       // Error handled by Auth Context
     }
   };
@@ -53,13 +55,13 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label
-              htmlFor="username"
+              htmlFor="login-username"
               className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
             >
               Username
             </label>
             <input
-              id="username"
+              id="login-username"
               type="text"
               required
               disabled={loading}
@@ -72,13 +74,13 @@ export default function LoginPage() {
 
           <div>
             <label
-              htmlFor="password"
+              htmlFor="login-password"
               className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
             >
               Master Password
             </label>
             <input
-              id="password"
+              id="login-password"
               type="password"
               required
               disabled={loading}
@@ -116,7 +118,7 @@ export default function LoginPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  DECRYPTING PRIVATE KEY & LOGGING IN...
+                  AUTHENTICATING...
                 </span>
               ) : (
                 <span className="tracking-widest uppercase">Unseal Vault</span>

@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useAuth } from "@/app/context";
 
 export default function RegisterPage() {
-  const { register, error, loading, clearError, enterSandbox } = useAuth();
+  const { register, error, status, clearError, enterSandbox } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  const loading = status === "loading";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +35,7 @@ export default function RegisterPage() {
 
     try {
       await register(username.trim(), password);
-    } catch (err) {
+    } catch {
       // Error handled by Auth Context
     }
   };
@@ -64,13 +66,13 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label
-              htmlFor="username"
+              htmlFor="register-username"
               className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
             >
               Username
             </label>
             <input
-              id="username"
+              id="register-username"
               type="text"
               required
               disabled={loading}
@@ -83,13 +85,13 @@ export default function RegisterPage() {
 
           <div>
             <label
-              htmlFor="password"
+              htmlFor="register-password"
               className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
             >
               Master Password
             </label>
             <input
-              id="password"
+              id="register-password"
               type="password"
               required
               disabled={loading}
@@ -102,13 +104,13 @@ export default function RegisterPage() {
 
           <div>
             <label
-              htmlFor="confirm-password"
+              htmlFor="register-confirm-password"
               className="block text-xs font-semibold uppercase tracking-wider text-[#2B2B2B]"
             >
               Confirm Master Password
             </label>
             <input
-              id="confirm-password"
+              id="register-confirm-password"
               type="password"
               required
               disabled={loading}
@@ -146,7 +148,7 @@ export default function RegisterPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  DERIVING KEYS & REGISTERING...
+                  GENERATING KEYS &amp; REGISTERING...
                 </span>
               ) : (
                 <span className="tracking-widest uppercase">Register Vault</span>

@@ -34,7 +34,8 @@ const DEMO_DOCUMENTS = [
 ];
 
 export default function DashboardPage() {
-  const { user, privateKey, loading: authLoading, logout } = useAuth();
+  const { user, privateKey, status, logout } = useAuth();
+  const authLoading = status === "loading";
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [demoDocs, setDemoDocs] = useState<any[]>([]);
   const [isSandbox, setIsSandbox] = useState(false);
@@ -59,7 +60,7 @@ export default function DashboardPage() {
     async function loadData() {
       setLoadingDocs(true);
       try {
-        const docs = await apiListDocuments(currentUser.token);
+        const docs = await apiListDocuments(currentUser.sessionToken);
         setDocuments(docs);
         setIsSandbox(false);
       } catch (err) {
@@ -146,9 +147,9 @@ export default function DashboardPage() {
       } else {
         // Send encrypted payload to backend
         const blob = new Blob([ciphertext as any], { type: "application/octet-stream" });
-        await apiUploadDocument(currentUser.token, blob, file.name, encryptedDek);
+        await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek);
         // Refresh documents from server
-        const docs = await apiListDocuments(currentUser.token);
+        const docs = await apiListDocuments(currentUser.sessionToken);
         setDocuments(docs);
       }
     } catch (err: any) {
@@ -188,7 +189,7 @@ export default function DashboardPage() {
       if (isSandbox) {
         ciphertext = doc.ciphertext;
       } else {
-        ciphertext = await apiDownloadDocument(currentUser.token, doc.id);
+        ciphertext = await apiDownloadDocument(currentUser.sessionToken, doc.id);
       }
 
       // Decrypt the file locally
@@ -219,9 +220,9 @@ export default function DashboardPage() {
       if (isSandbox) {
         setDemoDocs((prev) => prev.filter((d) => d.id !== id));
       } else {
-        await apiDeleteDocument(currentUser.token, id);
+        await apiDeleteDocument(currentUser.sessionToken, id);
         // Refresh docs
-        const docs = await apiListDocuments(currentUser.token);
+        const docs = await apiListDocuments(currentUser.sessionToken);
         setDocuments(docs);
       }
     } catch (err: any) {
