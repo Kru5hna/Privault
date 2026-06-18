@@ -1,4 +1,5 @@
 mod auth;
+mod documents;
 mod error;
 
 use axum::{routing::get, Json, Router};
@@ -49,6 +50,11 @@ async fn main() {
 
     tracing::info!("Database connection established");
 
+    // Ensure local uploads directory exists
+    tokio::fs::create_dir_all("uploads")
+        .await
+        .expect("Failed to create uploads directory");
+
     let state = AppState { db: db_pool };
 
     // CORS — restrict to known origins in production.
@@ -63,6 +69,7 @@ async fn main() {
         .route("/api/health", get(health_check))
         .route("/api/me", get(get_me))
         .nest("/api/auth", auth::router())
+        .nest("/api/documents", documents::router())
         .with_state(state)
         .layer(cors);
 
