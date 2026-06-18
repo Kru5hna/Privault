@@ -1,23 +1,18 @@
 mod auth;
 mod error;
 
-use axum::{extract::State, routing::get, Json, Router};
-use error::AppError;
-use serde::Serialize;
+use axum::{routing::get, Json, Router};
 use std::net::SocketAddr;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[derive(Serialize)]
-struct HealthStatus {
-    status: String,
-    message: String,
-}
+use crate::auth::AuthSession;
+use crate::error::AppError;
 
-// Shareable application state (similar to expressing config/db on app.locals)
+/// Shared application state — passed to all handlers via Axum's State extractor.
 #[derive(Clone)]
-struct AppState {
-    db: sqlx::PgPool,
+pub struct AppState {
+    pub db: sqlx::PgPool,
 }
 
 #[tokio::main]
@@ -25,7 +20,7 @@ async fn main() {
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    // Initialize tracing/logging
+    // Initialize structured logging
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -34,14 +29,13 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Initializing Privault backend database and server...");
+    tracing::info!("Initializing Privault backend...");
 
-    // Get Database URL from environment
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
+    // Database connection pool
+    let database_url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
 
-    // Establish connection pool to Supabase Postgres
-    // We disable the prepared statement cache because Supabase uses PgBouncer
-    // in transaction mode, which does not support prepared statements.
+    // Disable prepared statement cache for PgBouncer (Supabase) compatibility
     let db_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
         .connect_with(
@@ -51,57 +45,57 @@ async fn main() {
                 .statement_cache_capacity(0),
         )
         .await
-        .expect("Failed to connect to Supabase PostgreSQL");
+        .expect("Failed to connect to PostgreSQL");
 
-    tracing::info!("Successfully connected to database");
+    tracing::info!("Database connection established");
 
-    // Create AppState
     let state = AppState { db: db_pool };
 
-    // Define CORS Layer
-    let cors = CorsLayer::permissive();
+    // CORS — restrict to known origins in production.
+    // TODO: Read allowed origins from env var for production deployment.
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
-    // Setup routes with shared State
+    // Route tree
     let app = Router::new()
         .route("/api/health", get(health_check))
-        .route("/api/test-error", get(test_error))
-        .route("/api/me", get(get_me)) // Protected route — requires valid JWT
-        .nest("/api/auth", auth::router()) // Register & Login routes
-        .with_state(state) // Share the database pool with handlers
+        .route("/api/me", get(get_me))
+        .nest("/api/auth", auth::router())
+        .with_state(state)
         .layer(cors);
 
-    // Bind Address
+    // Bind and serve
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
-    let addr_str = format!("0.0.0.0:{}", port);
-    let addr: SocketAddr = addr_str.parse().expect("Invalid address format");
+    let addr: SocketAddr = format!("0.0.0.0:{}", port)
+        .parse()
+        .expect("Invalid address format");
 
     tracing::info!("Server listening on http://{}", addr);
+
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn health_check(State(state): State<AppState>) -> Result<Json<HealthStatus>, AppError> {
-    // Perform a test query to verify connection to Supabase database
-    sqlx::query("SELECT 1")
-        .execute(&state.db)
-        .await?;
+/// Health check — verifies the server and database connection are operational.
+async fn health_check(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    sqlx::query("SELECT 1").execute(&state.db).await?;
 
-    Ok(Json(HealthStatus {
-        status: "OK".to_string(),
-        message: "Privault Backend is operational and database connection is healthy".to_string(),
-    }))
+    Ok(Json(serde_json::json!({
+        "status": "OK",
+        "message": "Privault backend is operational"
+    })))
 }
 
-async fn test_error(State(_state): State<AppState>) -> Result<Json<serde_json::Value>, AppError> {
-    Err(AppError::BadRequest("This is a simulated bad request error".to_string()))
-}
-
-// Protected route — only runs if the JWT token is valid.
-// The `claims` parameter IS the middleware. If the token is missing/invalid,
-// Axum returns 401 automatically and this function never executes.
-async fn get_me(claims: auth::Claims) -> Json<serde_json::Value> {
+/// Protected route — returns the authenticated user's profile.
+/// The `AuthSession` parameter IS the middleware: if the session token is
+/// missing, invalid, or expired, Axum returns 401 and this function never runs.
+async fn get_me(session: AuthSession) -> Json<serde_json::Value> {
     Json(serde_json::json!({
-        "message": "You are authenticated!",
-        "user_id": claims.sub
+        "user_id": session.user_id.to_string(),
+        "username": session.username
     }))
 }

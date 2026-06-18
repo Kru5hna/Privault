@@ -5,12 +5,19 @@ use axum::{
 };
 use serde_json::json;
 
+/// Unified error type for all API responses.
+///
+/// Each variant maps to a specific HTTP status code and produces
+/// a consistent JSON body: `{ "error": "<message>" }`.
+///
+/// Internal details (DB queries, stack traces) are logged server-side
+/// but never leaked to the client.
 pub enum AppError {
-    Database(String),
-    BadRequest(String),
-    Unauthorized(String),
-    NotFound(String),
-    Internal(anyhow::Error),
+    BadRequest(String),       // 400 — validation failures, malformed input
+    Unauthorized(String),     // 401 — missing/invalid/expired session
+    NotFound(String),         // 404 — resource doesn't exist
+    Conflict(String),         // 409 — duplicate resource (e.g. username taken)
+    Internal(anyhow::Error),  // 500 — unexpected server errors
 }
 
 impl IntoResponse for AppError {
@@ -19,15 +26,13 @@ impl IntoResponse for AppError {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
-            AppError::Database(msg) => {
-                // Log database errors internally for debugging, but don't show full SQL to client
-                tracing::error!("Database error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Database error occurred".to_string())
-            }
+            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg),
             AppError::Internal(err) => {
-                // Log the anyhow::Error internally, show safe message to user
                 tracing::error!("Internal server error: {:?}", err);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
         };
 
@@ -36,7 +41,9 @@ impl IntoResponse for AppError {
     }
 }
 
-// Convert any standard error (e.g. database errors, IO errors) automatically into AppError::Internal
+/// Blanket conversion: any error type that implements `Into<anyhow::Error>`
+/// (which includes sqlx::Error, std::io::Error, etc.) automatically becomes
+/// an AppError::Internal. This keeps handler code clean — just use `?`.
 impl<E> From<E> for AppError
 where
     E: Into<anyhow::Error>,
