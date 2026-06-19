@@ -26,7 +26,8 @@ import { FileDetailsPanel } from "@/components/file-details-panel";
 import { TagBadge } from "@/components/tag-badge";
 import { FilePreviewModal } from "@/components/file-preview-modal";
 import { FolderSidebar } from "@/components/folder-sidebar";
-import { Menu } from "lucide-react";
+import { ShareModal } from "@/components/share-modal";
+import { Menu, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 // Fallback seed documents for sandbox demo
@@ -59,6 +60,7 @@ export default function DashboardPage() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [folderPath, setFolderPath] = useState<{id: string | null, name: string}[]>([{id: null, name: "Root"}]);
   const [selectedDoc, setSelectedDoc] = useState<DocumentMetadata | null>(null);
+  const [shareDoc, setShareDoc] = useState<DocumentMetadata | null>(null);
   const [viewMode, setViewMode] = useState<"vault" | "shares">("vault");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -733,6 +735,16 @@ export default function DashboardPage() {
                                 <span className="btn-bg" />
                                 <span className="btn-text">Delete</span>
                               </button>
+                              <button
+                                onClick={(e) => {
+                                   e.stopPropagation();
+                                   setShareDoc(doc);
+                                }}
+                                className="text-xs font-bold uppercase tracking-widest text-[#F5F5F0]/70 hover:text-[#E41613] hover:underline underline-offset-4 decoration-[#E41613] decoration-2 transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <Share2 size={12} />
+                                Share
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -768,6 +780,10 @@ export default function DashboardPage() {
         onTagAdded={(docId, newTags) => {
            setDocTagsCache(prev => ({...prev, [docId]: newTags}));
         }}
+        onShare={(doc) => {
+           setSelectedDoc(null);
+           setShareDoc(doc);
+        }}
       />
       
       {/* File Preview Modal */}
@@ -779,6 +795,15 @@ export default function DashboardPage() {
         }}
         fileName={previewDoc?.name || ""}
         fileBytes={previewBytes}
+      />
+
+      {/* Share Modal */}
+      <ShareModal
+        doc={shareDoc}
+        isOpen={shareDoc !== null}
+        onClose={() => setShareDoc(null)}
+        user={user}
+        privateKey={privateKey}
       />
     </div>
   );

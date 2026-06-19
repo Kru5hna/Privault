@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { DocumentMetadata, TagMetadata, apiListDocumentTags, apiTagDocument, apiUntagDocument, apiCreateTag } from "@/lib/api";
 import { ScrambledText } from "@/components/scrambled-text";
 import { TagBadge } from "@/components/tag-badge";
+import { Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface FileDetailsPanelProps {
@@ -11,9 +12,10 @@ interface FileDetailsPanelProps {
   user: any;
   allTags: TagMetadata[];
   onTagAdded: (docId: string, tags: TagMetadata[]) => void;
+  onShare?: (doc: DocumentMetadata) => void;
 }
 
-export function FileDetailsPanel({ doc, isOpen, onClose, user, allTags, onTagAdded }: FileDetailsPanelProps) {
+export function FileDetailsPanel({ doc, isOpen, onClose, user, allTags, onTagAdded, onShare }: FileDetailsPanelProps) {
   const [mounted, setMounted] = useState(false);
   const [docTags, setDocTags] = useState<TagMetadata[]>([]);
   const [isAddingTag, setIsAddingTag] = useState(false);
@@ -246,6 +248,17 @@ export function FileDetailsPanel({ doc, isOpen, onClose, user, allTags, onTagAdd
                     </div>
                   </div>
                 </div>
+
+                {/* Share Button */}
+                {onShare && (
+                  <button
+                    onClick={() => onShare(doc)}
+                    className="w-full flex items-center justify-center gap-2 py-3 border border-[#E41613]/30 hover:border-[#E41613] bg-[#E41613]/5 hover:bg-[#E41613]/10 text-[#E41613] hover:text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer mt-4"
+                  >
+                    <Share2 size={14} />
+                    Share Document
+                  </button>
+                )}
 
                 {/* Threat model note */}
                 <div className="rounded border border-amber-500/20 bg-amber-500/5 p-4 mt-4">
