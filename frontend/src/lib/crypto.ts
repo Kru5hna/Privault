@@ -388,7 +388,7 @@ export async function decryptOwnerLinkKey(
     { name: "RSA-OAEP" },
     { name: "AES-GCM", length: 256 },
     true,
-    ["wrapKey", "export"]
+    ["wrapKey"]
   );
 
   const exported = await window.crypto.subtle.exportKey("raw", linkKey);
