@@ -319,7 +319,7 @@ export async function getPublicKeyFromPrivateKey(
 export async function encryptDekForSharing(
   encryptedDekBase64: string,
   rsaPrivateKey: CryptoKey
-): Promise<{ linkKey: string; reEncryptedDek: string }> {
+): Promise<{ linkKey: string; reEncryptedDek: string; ownerEncryptedLinkKey: string }> {
   // 1. Unwrap the DEK using the owner's RSA private key
   const wrappedDek = base64ToUint8Array(encryptedDekBase64);
   const dek = await window.crypto.subtle.unwrapKey(
@@ -357,10 +357,42 @@ export async function encryptDekForSharing(
   // 5. Export the Link Key to raw bytes to be placed in URL fragment
   const exportedLinkKey = await window.crypto.subtle.exportKey("raw", linkKey);
 
+  // 6. Extract the RSA public key from the private key
+  const publicKey = await getPublicKeyFromPrivateKey(rsaPrivateKey);
+
+  // 7. Wrap (encrypt) the Link Key with the owner's RSA Public Key using RSA-OAEP
+  const wrappedLinkKeyBuffer = await window.crypto.subtle.wrapKey(
+    "raw",
+    linkKey,
+    publicKey,
+    { name: "RSA-OAEP" }
+  );
+
   return {
     linkKey: arrayBufferToBase64(exportedLinkKey),
     reEncryptedDek: arrayBufferToBase64(combined),
+    ownerEncryptedLinkKey: arrayBufferToBase64(wrappedLinkKeyBuffer),
   };
+}
+
+/** Decrypt ownerEncryptedLinkKey using the owner's RSA private key */
+export async function decryptOwnerLinkKey(
+  ownerEncryptedLinkKeyBase64: string,
+  rsaPrivateKey: CryptoKey
+): Promise<string> {
+  const wrappedLinkKey = base64ToUint8Array(ownerEncryptedLinkKeyBase64);
+  const linkKey = await window.crypto.subtle.unwrapKey(
+    "raw",
+    wrappedLinkKey as BufferSource,
+    rsaPrivateKey,
+    { name: "RSA-OAEP" },
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["wrapKey", "export"]
+  );
+
+  const exported = await window.crypto.subtle.exportKey("raw", linkKey);
+  return arrayBufferToBase64(exported);
 }
 
 /** Decrypt DEK using a Link Key (on the share landing page) */
