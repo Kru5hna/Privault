@@ -10,6 +10,7 @@ import {
   DocumentMetadata,
 } from "@/lib/api";
 import { encryptFile, decryptFile, getPublicKeyFromPrivateKey } from "@/lib/crypto";
+import { ScrambledText } from "@/components/scrambled-text";
 
 // Fallback seed documents for sandbox demo
 const DEMO_DOCUMENTS = [
@@ -447,7 +448,7 @@ export default function DashboardPage() {
                             ></path>
                           </svg>
                           <span className="min-w-0 break-all sm:truncate sm:max-w-md font-medium">
-                            {doc.name}
+                            <ScrambledText text={doc.name} delay={20} />
                           </span>
                         </div>
                       </td>
