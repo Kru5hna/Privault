@@ -39,6 +39,14 @@ export interface FolderMetadata {
   parent_id: string | null;
   name: string;
   created_at: string;
+}
+
+export interface TagMetadata {
+  id: string;
+  owner_id: string;
+  name: string;
+  color: string;
+  created_at: string;
 }  owner_id: string;
   name: string;
   encrypted_dek: string;
@@ -264,6 +272,78 @@ export async function apiDeleteFolder(
 ): Promise<{ message: string }> {
   const res = await fetch(`${API_BASE_URL}/api/folders/${folderId}`, {
     method: "DELETE",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tag Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function apiCreateTag(
+  token: string,
+  name: string,
+  color?: string
+): Promise<TagMetadata> {
+  const res = await fetch(`${API_BASE_URL}/api/tags`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ name, color }),
+  });
+  return handleResponse(res);
+}
+
+export async function apiListTags(token: string): Promise<TagMetadata[]> {
+  const res = await fetch(`${API_BASE_URL}/api/tags`, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+export async function apiDeleteTag(
+  token: string,
+  tagId: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/tags/${tagId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+export async function apiTagDocument(
+  token: string,
+  documentId: string,
+  tagId: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/tags/document/${documentId}`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ tag_id: tagId }),
+  });
+  return handleResponse(res);
+}
+
+export async function apiUntagDocument(
+  token: string,
+  documentId: string,
+  tagId: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/tags/document/${documentId}/${tagId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+export async function apiListDocumentTags(
+  token: string,
+  documentId: string
+): Promise<TagMetadata[]> {
+  const res = await fetch(`${API_BASE_URL}/api/tags/document/${documentId}`, {
+    method: "GET",
     headers: authHeaders(token),
   });
   return handleResponse(res);

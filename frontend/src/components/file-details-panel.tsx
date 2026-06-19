@@ -1,19 +1,36 @@
 import React, { useEffect, useState } from "react";
-import { DocumentMetadata } from "@/lib/api";
+import { DocumentMetadata, TagMetadata, apiListDocumentTags, apiTagDocument, apiUntagDocument, apiCreateTag } from "@/lib/api";
 import { ScrambledText } from "@/components/scrambled-text";
+import { TagBadge } from "@/components/tag-badge";
 
 interface FileDetailsPanelProps {
   doc: DocumentMetadata | null;
   isOpen: boolean;
   onClose: () => void;
+  user: any;
+  allTags: TagMetadata[];
+  onTagAdded: (docId: string, tags: TagMetadata[]) => void;
 }
 
-export function FileDetailsPanel({ doc, isOpen, onClose }: FileDetailsPanelProps) {
+export function FileDetailsPanel({ doc, isOpen, onClose, user, allTags, onTagAdded }: FileDetailsPanelProps) {
   const [mounted, setMounted] = useState(false);
+  const [docTags, setDocTags] = useState<TagMetadata[]>([]);
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#E41613");
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Fetch doc tags when panel opens
+  useEffect(() => {
+    if (isOpen && doc && user) {
+      apiListDocumentTags(user.sessionToken, doc.id)
+        .then(tags => setDocTags(tags))
+        .catch(console.error);
+    }
+  }, [isOpen, doc, user]);
 
   if (!mounted) return null;
 
@@ -42,6 +59,47 @@ export function FileDetailsPanel({ doc, isOpen, onClose }: FileDetailsPanelProps
       return parts.pop()?.toUpperCase() || "UNKNOWN";
     }
     return "UNKNOWN";
+  };
+
+  const handleAddTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !doc || !newTagName.trim()) return;
+    
+    try {
+      // Check if tag already exists in allTags
+      let targetTag = allTags.find(t => t.name.toLowerCase() === newTagName.trim().toLowerCase());
+      
+      // If not, create it
+      if (!targetTag) {
+        targetTag = await apiCreateTag(user.sessionToken, newTagName.trim(), newTagColor);
+      }
+      
+      // Associate with document
+      await apiTagDocument(user.sessionToken, doc.id, targetTag.id);
+      
+      // Refresh local tags
+      const updatedTags = await apiListDocumentTags(user.sessionToken, doc.id);
+      setDocTags(updatedTags);
+      onTagAdded(doc.id, updatedTags);
+      
+      setNewTagName("");
+      setIsAddingTag(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add tag.");
+    }
+  };
+
+  const handleRemoveTag = async (tagId: string) => {
+    if (!user || !doc) return;
+    try {
+      await apiUntagDocument(user.sessionToken, doc.id, tagId);
+      const updatedTags = docTags.filter(t => t.id !== tagId);
+      setDocTags(updatedTags);
+      onTagAdded(doc.id, updatedTags);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -103,6 +161,61 @@ export function FileDetailsPanel({ doc, isOpen, onClose }: FileDetailsPanelProps
                   <h4 className="text-micro text-white/50 mb-2">Cryptographic Metadata</h4>
                   
                   <div className="grid grid-cols-1 gap-4">
+                    
+                    {/* Tags Section */}
+                    <div className="flex flex-col mb-2">
+                      <div className="flex items-center justify-between mb-2">
+                         <span className="text-xs text-white/40 uppercase tracking-widest font-semibold">Security Tags</span>
+                         {!isAddingTag && (
+                           <button onClick={() => setIsAddingTag(true)} className="text-[#E41613] hover:text-white transition-colors">
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                           </button>
+                         )}
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {docTags.length === 0 && !isAddingTag && (
+                          <span className="text-xs text-white/30 italic">No tags assigned</span>
+                        )}
+                        {docTags.map(tag => (
+                          <TagBadge 
+                            key={tag.id} 
+                            tag={tag} 
+                            onRemove={() => handleRemoveTag(tag.id)} 
+                          />
+                        ))}
+                      </div>
+
+                      {isAddingTag && (
+                         <form onSubmit={handleAddTag} className="flex flex-col gap-2 bg-white/5 p-2 rounded border border-white/10 mt-1">
+                            <div className="flex gap-2">
+                              <input 
+                                autoFocus
+                                type="text"
+                                placeholder="Tag name..."
+                                value={newTagName}
+                                onChange={e => setNewTagName(e.target.value)}
+                                className="input-tactical py-1.5 px-2 text-xs flex-1 bg-black/20"
+                                list="tag-suggestions"
+                              />
+                              <datalist id="tag-suggestions">
+                                {allTags.map(t => <option key={t.id} value={t.name} />)}
+                              </datalist>
+                              <input 
+                                type="color" 
+                                value={newTagColor}
+                                onChange={e => setNewTagColor(e.target.value)}
+                                className="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent"
+                              />
+                            </div>
+                            <div className="flex justify-end gap-2 mt-1">
+                               <button type="button" onClick={() => setIsAddingTag(false)} className="text-[10px] uppercase font-bold text-white/50 hover:text-white">Cancel</button>
+                               <button type="submit" className="text-[10px] uppercase font-bold text-[#E41613] hover:text-white">Add Tag</button>
+                            </div>
+                         </form>
+                      )}
+                    </div>
+                    
                     <div className="flex flex-col">
                       <span className="text-xs text-white/40 uppercase tracking-widest font-semibold mb-1">Status</span>
                       <div className="flex items-center gap-2">

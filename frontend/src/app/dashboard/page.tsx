@@ -10,12 +10,19 @@ import {
   apiCreateFolder,
   apiListFolders,
   apiDeleteFolder,
+  apiListTags,
+  apiCreateTag,
+  apiTagDocument,
+  apiUntagDocument,
+  apiListDocumentTags,
   DocumentMetadata,
   FolderMetadata,
+  TagMetadata,
 } from "@/lib/api";
 import { encryptFile, decryptFile, getPublicKeyFromPrivateKey } from "@/lib/crypto";
 import { ScrambledText } from "@/components/scrambled-text";
 import { FileDetailsPanel } from "@/components/file-details-panel";
+import { TagBadge } from "@/components/tag-badge";
 
 // Fallback seed documents for sandbox demo
 const DEMO_DOCUMENTS = [
@@ -50,6 +57,10 @@ export default function DashboardPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<DocumentMetadata | null>(null);
 
+  const [allTags, setAllTags] = useState<TagMetadata[]>([]);
+  const [docTagsCache, setDocTagsCache] = useState<Record<string, TagMetadata[]>>({});
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+
   const [demoDocs, setDemoDocs] = useState<any[]>([]);
   const [isSandbox, setIsSandbox] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(true);
@@ -74,13 +85,30 @@ export default function DashboardPage() {
     async function loadData() {
       setLoadingDocs(true);
       try {
-        const [docs, fldrs] = await Promise.all([
+        const [docs, fldrs, tags] = await Promise.all([
           apiListDocuments(currentUser.sessionToken, currentFolderId),
-          apiListFolders(currentUser.sessionToken, currentFolderId)
+          apiListFolders(currentUser.sessionToken, currentFolderId),
+          apiListTags(currentUser.sessionToken)
         ]);
         setDocuments(docs);
         setFolders(fldrs);
+        setAllTags(tags);
         setIsSandbox(false);
+        
+        // Fetch tags for all docs in view concurrently
+        const docTagsObj: Record<string, TagMetadata[]> = {};
+        await Promise.all(
+          docs.map(async (d) => {
+            try {
+              const dt = await apiListDocumentTags(currentUser.sessionToken, d.id);
+              docTagsObj[d.id] = dt;
+            } catch {
+              docTagsObj[d.id] = [];
+            }
+          })
+        );
+        setDocTagsCache(docTagsObj);
+        
       } catch (err) {
         console.warn("Backend documents API failed or not yet implemented. Falling back to local memory sandbox.", err);
         setIsSandbox(true);
@@ -318,10 +346,15 @@ export default function DashboardPage() {
     }
   };
 
-  // Filter documents by search query
-  const displayedDocs = (isSandbox ? demoDocs : documents).filter((doc) =>
-    doc.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter documents by search query and tags
+  const displayedDocs = (isSandbox ? demoDocs : documents).filter((doc) => {
+    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
+    if (selectedTagFilter) {
+       const hasTag = docTagsCache[doc.id]?.some((t: TagMetadata) => t.id === selectedTagFilter);
+       return matchesSearch && hasTag;
+    }
+    return matchesSearch;
+  });
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -511,6 +544,25 @@ export default function DashboardPage() {
               </div>
             </div>
             
+            {/* Tag Filter Dropdown */}
+            {!isSandbox && allTags.length > 0 && (
+              <div className="relative shrink-0">
+                <select 
+                  className="input-tactical py-2.5 px-4 text-xs font-semibold appearance-none bg-[#15161A] text-white/70 pr-8 border border-white/10"
+                  value={selectedTagFilter || ""}
+                  onChange={(e) => setSelectedTagFilter(e.target.value || null)}
+                >
+                  <option value="">All Tags</option>
+                  {allTags.map(t => (
+                    <option key={t.id} value={t.id}>{t.name.toUpperCase()}</option>
+                  ))}
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/50">
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+              </div>
+            )}
+            
             <div className="flex shrink-0">
                {!isSandbox && !isCreatingFolder && (
                  <button 
@@ -626,9 +678,18 @@ export default function DashboardPage() {
                               d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                             ></path>
                           </svg>
-                          <span className="min-w-0 break-all sm:truncate sm:max-w-md font-medium">
-                            <ScrambledText text={doc.name} delay={20} />
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="min-w-0 break-all sm:truncate sm:max-w-md font-medium">
+                              <ScrambledText text={doc.name} delay={20} />
+                            </span>
+                            {!isSandbox && docTagsCache[doc.id]?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {docTagsCache[doc.id].map((t: TagMetadata) => (
+                                  <TagBadge key={t.id} tag={t} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td data-label="Size" className="py-4 pr-4 text-xs text-white/40 font-mono">
@@ -667,7 +728,18 @@ export default function DashboardPage() {
       <FileDetailsPanel 
         doc={selectedDoc} 
         isOpen={selectedDoc !== null} 
-        onClose={() => setSelectedDoc(null)} 
+        onClose={() => {
+           setSelectedDoc(null);
+           // Refresh tags when closing just in case they changed
+           if (user) {
+             apiListTags(user.sessionToken).then(setAllTags).catch(()=>{});
+           }
+        }} 
+        user={user}
+        allTags={allTags}
+        onTagAdded={(docId, newTags) => {
+           setDocTagsCache(prev => ({...prev, [docId]: newTags}));
+        }}
       />
     </div>
   );
