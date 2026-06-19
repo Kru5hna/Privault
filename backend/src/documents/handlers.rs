@@ -1,13 +1,19 @@
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     Json,
 };
 use tokio::fs::{remove_file, File};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
+use serde::Deserialize;
 use super::models::DocumentMetadata;
 use crate::{auth::AuthSession, error::AppError, AppState};
+
+#[derive(Deserialize)]
+pub struct ListDocumentsQuery {
+    pub folder_id: Option<Uuid>,
+}
 
 /// Upload an encrypted document
 pub async fn upload_document(
@@ -18,6 +24,7 @@ pub async fn upload_document(
     let mut name = String::new();
     let mut encrypted_dek = String::new();
     let mut file_bytes = Vec::new();
+    let mut folder_id: Option<Uuid> = None;
 
     while let Some(field) = multipart.next_field().await.unwrap_or(None) {
         let field_name = field.name().unwrap_or("").to_string();
@@ -28,6 +35,10 @@ pub async fn upload_document(
             encrypted_dek = field.text().await.unwrap_or_default();
         } else if field_name == "file" {
             file_bytes = field.bytes().await.unwrap_or_default().to_vec();
+        } else if field_name == "folder_id" {
+            if let Ok(fid) = Uuid::parse_str(&field.text().await.unwrap_or_default()) {
+                folder_id = Some(fid);
+            }
         }
     }
 
@@ -56,15 +67,16 @@ pub async fn upload_document(
     // Insert document metadata into DB
     sqlx::query!(
         r#"
-        INSERT INTO documents (id, owner_id, name, encrypted_dek, storage_path, size)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO documents (id, owner_id, name, encrypted_dek, storage_path, size, folder_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,
         doc_id,
         session.user_id,
         name,
         encrypted_dek,
         storage_path,
-        size
+        size,
+        folder_id
     )
     .execute(&state.db)
     .await
@@ -82,20 +94,40 @@ pub async fn upload_document(
 /// List all documents owned by the logged-in user
 pub async fn list_documents(
     session: AuthSession,
+    Query(query): Query<ListDocumentsQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<DocumentMetadata>>, AppError> {
-    let docs = sqlx::query_as!(
-        DocumentMetadata,
-        r#"
-        SELECT id, name, encrypted_dek, size, created_at
-        FROM documents
-        WHERE owner_id = $1
-        ORDER BY created_at DESC
-        "#,
-        session.user_id
-    )
-    .fetch_all(&state.db)
-    .await
+    let docs = match query.folder_id {
+        Some(fid) => {
+            sqlx::query_as!(
+                DocumentMetadata,
+                r#"
+                SELECT id, name, encrypted_dek, size, folder_id, created_at
+                FROM documents
+                WHERE owner_id = $1 AND folder_id = $2
+                ORDER BY created_at DESC
+                "#,
+                session.user_id,
+                fid
+            )
+            .fetch_all(&state.db)
+            .await
+        }
+        None => {
+            sqlx::query_as!(
+                DocumentMetadata,
+                r#"
+                SELECT id, name, encrypted_dek, size, folder_id, created_at
+                FROM documents
+                WHERE owner_id = $1 AND folder_id IS NULL
+                ORDER BY created_at DESC
+                "#,
+                session.user_id
+            )
+            .fetch_all(&state.db)
+            .await
+        }
+    }
     .map_err(|e| {
         tracing::error!("Failed to list documents: {}", e);
         AppError::Internal(anyhow::anyhow!("Internal error"))

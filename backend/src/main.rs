@@ -1,6 +1,7 @@
 mod auth;
 mod documents;
 mod error;
+mod folders;
 
 use axum::{routing::get, Json, Router};
 use std::net::SocketAddr;
@@ -70,6 +71,7 @@ async fn main() {
         .route("/api/me", get(get_me))
         .nest("/api/auth", auth::router())
         .nest("/api/documents", documents::router())
+        .nest("/api/folders", folders::router())
         .with_state(state)
         .layer(cors);
 
