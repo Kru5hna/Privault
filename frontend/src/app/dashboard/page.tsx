@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { encryptFile, decryptFile, getPublicKeyFromPrivateKey } from "@/lib/crypto";
 import { ScrambledText } from "@/components/scrambled-text";
+import { FileDetailsPanel } from "@/components/file-details-panel";
 
 // Fallback seed documents for sandbox demo
 const DEMO_DOCUMENTS = [
@@ -47,6 +48,7 @@ export default function DashboardPage() {
   const [folderPath, setFolderPath] = useState<{id: string | null, name: string}[]>([{id: null, name: "Root"}]);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [selectedDoc, setSelectedDoc] = useState<DocumentMetadata | null>(null);
 
   const [demoDocs, setDemoDocs] = useState<any[]>([]);
   const [isSandbox, setIsSandbox] = useState(false);
@@ -584,7 +586,11 @@ export default function DashboardPage() {
                   {/* Render Files */}
                   {displayedDocs.map((doc) => (
                     <tr key={doc.id} className="group border-b border-white/[0.02] last:border-b-0 hover:bg-white/[0.01] transition-colors sm:table-row">
-                      <td data-label="Name" className="py-4 pr-4 text-sm text-white/95">
+                      <td 
+                        data-label="Name" 
+                        className="py-4 pr-4 text-sm text-white/95 cursor-pointer"
+                        onClick={() => setSelectedDoc(doc)}
+                      >
                         <div className="flex items-center gap-3">
                           <svg
                             className="h-4 w-4 text-[#E41613] shrink-0"
@@ -635,6 +641,13 @@ export default function DashboardPage() {
           )}
         </section>
       </main>
+
+      {/* File Details Slide-out Panel */}
+      <FileDetailsPanel 
+        doc={selectedDoc} 
+        isOpen={selectedDoc !== null} 
+        onClose={() => setSelectedDoc(null)} 
+      />
     </div>
   );
 }
