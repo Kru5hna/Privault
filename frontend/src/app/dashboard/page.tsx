@@ -25,7 +25,7 @@ import { FilePreviewModal } from "@/components/file-preview-modal";
 import { FolderSidebar } from "@/components/folder-sidebar";
 import { ShareModal } from "@/components/share-modal";
 import { SharedLinksPanel } from "@/components/shared-links-panel";
-import { Menu, Share2 } from "lucide-react";
+import { Menu, Share2, X, Lock, CheckCircle2, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 interface SandboxDocument extends DocumentMetadata {
@@ -78,6 +78,8 @@ export default function DashboardPage() {
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [uploadState, setUploadState] = useState<"idle" | "encrypting" | "uploading" | "complete">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [batchUploads, setBatchUploads] = useState<Record<string, { name: string; size: number; state: "encrypting" | "uploading" | "complete" | "failed"; error?: string }>>({});
+  const [panelMinimized, setPanelMinimized] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -183,59 +185,121 @@ export default function DashboardPage() {
     const currentUser = user;
     const currentKey = privateKey;
     setUploadError(null);
+    setPanelMinimized(false);
+
+    // Initialize batchUploads state
+    const initialUploads: Record<string, { name: string; size: number; state: "encrypting" | "uploading" | "complete" | "failed"; error?: string }> = {};
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      initialUploads[file.name] = {
+        name: file.name,
+        size: file.size,
+        state: "encrypting",
+      };
+    }
+    setBatchUploads(initialUploads);
+    setUploadState("uploading");
+
     try {
       // 1. Generate RSA public key from private key once for the batch
-      setUploadState("encrypting");
       const rsaPublicKey = await getPublicKeyFromPrivateKey(currentKey);
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // 2. Read file bytes
-        const fileBytes = new Uint8Array(await file.arrayBuffer());
+      // Define a single file upload worker
+      const uploadWorker = async (file: File) => {
+        try {
+          console.log(`[Upload Worker] Starting encryption for: ${file.name} (size: ${file.size} bytes)`);
+          
+          // Read file bytes
+          const fileBytes = new Uint8Array(await file.arrayBuffer());
 
-        // 3. Encrypt file using Web Crypto
-        const { ciphertext, encryptedDek } = await encryptFile(fileBytes, rsaPublicKey);
+          // Encrypt file using Web Crypto
+          const { ciphertext, encryptedDek } = await encryptFile(fileBytes, rsaPublicKey);
 
-        setUploadState("uploading");
+          // Update state for this file to uploading
+          setBatchUploads(prev => ({
+            ...prev,
+            [file.name]: { ...prev[file.name], state: "uploading" }
+          }));
 
-        if (isSandbox) {
-          // Mock save to sandbox state
-          const newDoc: SandboxDocument = {
-            id: `sandbox-doc-${Date.now()}-${i}`,
-            owner_id: currentUser.userId,
+          console.log(`[Upload Worker] Encryption complete for: ${file.name}. Staging upload...`, {
             name: file.name,
             size: file.size,
-            folder_id: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            encrypted_dek: encryptedDek,
-            ciphertext,
-          };
-          setDemoDocs((prev) => [newDoc, ...prev]);
-        } else {
-          // Send encrypted payload to backend
-          const blob = new Blob([ciphertext as unknown as BlobPart], { type: "application/octet-stream" });
-          await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek, currentFolderId);
+            encryptedDekLength: encryptedDek.length,
+            ciphertextLength: ciphertext.length,
+          });
+
+          if (isSandbox) {
+            // Mock save to sandbox state
+            const newDoc: SandboxDocument = {
+              id: `sandbox-doc-${Date.now()}-${Math.random()}`,
+              owner_id: currentUser.userId,
+              name: file.name,
+              size: file.size,
+              folder_id: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              encrypted_dek: encryptedDek,
+              ciphertext,
+            };
+            setDemoDocs((prev) => [newDoc, ...prev]);
+          } else {
+            // Send encrypted payload to backend
+            const blob = new Blob([ciphertext as unknown as BlobPart], { type: "application/octet-stream" });
+            await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek, currentFolderId);
+          }
+
+          // Mark complete
+          setBatchUploads(prev => ({
+            ...prev,
+            [file.name]: { ...prev[file.name], state: "complete" }
+          }));
+          console.log(`[Upload Worker] Successfully uploaded: ${file.name}`);
+
+        } catch (err: unknown) {
+          const errorObject = err as Error;
+          const errorMsg = errorObject?.message || "Encryption or upload failed";
+          console.error(`[Upload Worker] Error for ${file.name}:`, errorMsg, err);
+          
+          // Mark failed
+          setBatchUploads(prev => ({
+            ...prev,
+            [file.name]: { ...prev[file.name], state: "failed", error: errorMsg }
+          }));
+          throw err;
         }
+      };
+
+      // Run parallel uploads using Promise.allSettled
+      const uploadPromises = Array.from(files).map(file => uploadWorker(file));
+      const results = await Promise.allSettled(uploadPromises);
+
+      // Verify if there were any failures
+      const failedCount = results.filter(r => r.status === "rejected").length;
+      if (failedCount > 0) {
+        setUploadError(`Batch completed with ${failedCount} failure(s). See progress panel.`);
+        setUploadState("idle");
+      } else {
+        setUploadState("complete");
+        setTimeout(() => {
+          setUploadState("idle");
+        }, 2000);
       }
 
-      // 4. Refresh documents list once after all uploads finish
-      if (!isSandbox) {
-        const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
-        setDocuments(docs);
-      }
-      
-      setUploadState("complete");
-      setTimeout(() => {
-         setUploadState("idle");
-      }, 2000);
-      
     } catch (err: unknown) {
-      console.error(err);
+      console.error("Batch upload outer failure:", err);
       const errorObject = err as Error;
-      setUploadError(errorObject?.message || "Failed to encrypt or upload files.");
+      setUploadError(errorObject?.message || "Failed to process batch upload.");
       setUploadState("idle");
+    } finally {
+      // ALWAYS refresh documents list at the end of the batch
+      if (!isSandbox) {
+        try {
+          const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
+          setDocuments(docs);
+        } catch (refreshErr) {
+          console.error("Failed to refresh documents list:", refreshErr);
+        }
+      }
     }
   };
 
@@ -821,6 +885,70 @@ export default function DashboardPage() {
         user={user}
         privateKey={privateKey}
       />
+
+      {/* Floating Batch Upload Progress Panel */}
+      {Object.keys(batchUploads).length > 0 && (
+        <div className="fixed bottom-6 right-6 z-50 w-80 bg-[#111215] border border-white/10 shadow-2xl transition-all duration-300 font-sans">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-[#15161A] border-b border-white/10">
+            <span className="text-xs font-bold tracking-widest text-white uppercase">
+              Uploads ({Object.values(batchUploads).filter(u => u.state === "complete").length}/{Object.keys(batchUploads).length})
+            </span>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setPanelMinimized(prev => !prev)}
+                className="text-[#8E929F] hover:text-white p-1 transition-colors cursor-pointer"
+              >
+                {panelMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              <button 
+                onClick={() => setBatchUploads({})}
+                className="text-[#8E929F] hover:text-red-500 p-1 transition-colors cursor-pointer"
+                title="Dismiss panel"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          {!panelMinimized && (
+            <div className="max-h-60 overflow-y-auto divide-y divide-white/5 custom-scrollbar">
+              {Object.values(batchUploads).map((upload) => (
+                <div key={upload.name} className="p-3 flex items-start justify-between gap-3 text-xs">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-white truncate" title={upload.name}>
+                      {upload.name}
+                    </p>
+                    <p className="text-[10px] text-[#8E929F] mt-0.5">
+                      {upload.size < 1024 ? `${upload.size} B` : `${(upload.size / 1024).toFixed(1)} KB`} • {upload.state}
+                    </p>
+                    {upload.error && (
+                      <p className="text-[9px] text-[#E41613] mt-1 break-words font-mono">
+                        {upload.error}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 mt-0.5">
+                    {upload.state === "encrypting" && (
+                      <Lock size={14} className="text-amber-500 animate-pulse" />
+                    )}
+                    {upload.state === "uploading" && (
+                      <div className="h-3 w-3 border-2 border-[#E41613] border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {upload.state === "complete" && (
+                      <CheckCircle2 size={14} className="text-green-500" />
+                    )}
+                    {upload.state === "failed" && (
+                      <AlertTriangle size={14} className="text-red-500" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
