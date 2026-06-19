@@ -11,6 +11,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      closeButton
       icons={{
         success: (
           <CircleCheckIcon className="size-4" />
@@ -38,7 +39,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "group toast group-[.toaster]:bg-[var(--popover)] group-[.toaster]:text-[var(--popover-foreground)] group-[.toaster]:border-[var(--border)] group-[.toaster]:rounded-none group-[.toaster]:shadow-2xl",
+          description: "group-[.toast]:text-white/60",
+          actionButton: "group-[.toast]:bg-[#E41613] group-[.toast]:text-white group-[.toast]:font-bold group-[.toast]:rounded-none group-[.toast]:border group-[.toast]:border-[#E41613] group-[.toast]:hover:bg-black group-[.toast]:transition-colors group-[.toast]:px-4 group-[.toast]:py-2 group-[.toast]:text-xs cursor-pointer",
+          cancelButton: "group-[.toast]:bg-transparent group-[.toast]:text-white/80 group-[.toast]:font-semibold group-[.toast]:rounded-none group-[.toast]:border group-[.toast]:border-white/20 group-[.toast]:hover:bg-white/5 group-[.toast]:transition-colors group-[.toast]:px-4 group-[.toast]:py-2 group-[.toast]:text-xs cursor-pointer",
+          closeButton: "group-[.toast]:bg-black group-[.toast]:text-white group-[.toast]:border-white/10 group-[.toast]:hover:bg-white/10 group-[.toast]:transition-colors cursor-pointer",
         },
       }}
       {...props}

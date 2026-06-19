@@ -274,6 +274,10 @@ export default function DashboardPage() {
            }
          }
        },
+       cancel: {
+         label: 'Cancel',
+         onClick: () => {}
+       },
        duration: 10000,
      });
   };
@@ -387,6 +391,10 @@ export default function DashboardPage() {
              toast.error(`Delete failed: ${err.message}`);
            }
          }
+       },
+       cancel: {
+         label: 'Cancel',
+         onClick: () => {}
        },
        duration: 10000,
     });
