@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/app/context";
 import {
+  FAQ_ITEMS,
   LANDING_STATS,
   SECURITY_STRATEGIES,
   VAULT_FEATURES,
@@ -22,10 +25,12 @@ export function LandingBody() {
       <MissionSection />
       <SpecificationsSection />
       <StrategiesSection />
+      <FaqSection />
       <CtaSection />
     </>
   );
 }
+
 
 function StatsBand() {
   return (
@@ -39,6 +44,8 @@ function StatsBand() {
                 <div className="font-serif text-5xl md:text-6xl font-light text-white">
                   <AnimatedCounter
                     value={stat.value}
+                    start={stat.start}
+                    prefix={stat.prefix}
                     suffix={stat.suffix}
                     duration={2}
                   />
@@ -242,3 +249,85 @@ function CtaSection() {
     </section>
   );
 }
+
+function FaqSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const toggleFaq = (index: number) => {
+    setOpenIndex(openIndex === index ? null : index);
+  };
+
+  return (
+    <section
+      id="faq"
+      className="relative py-16 sm:py-28 md:py-40 bg-black overflow-hidden border-t border-white/5"
+    >
+      <div className="absolute inset-0 dotted-grid-dark opacity-30 pointer-events-none" />
+      
+      <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6">
+        <div className="mb-12 sm:mb-20 text-center">
+          <FadeUp>
+            <p className="text-label text-[#E41613] mb-4">FAQ</p>
+          </FadeUp>
+          <FadeUp delay={0.1}>
+            <h2 className="font-serif text-3xl md:text-5xl font-light text-white leading-tight">
+              Frequently Asked <span className="italic text-[#E41613]">Questions</span>
+            </h2>
+          </FadeUp>
+        </div>
+
+        <div className="space-y-4 max-w-3xl mx-auto">
+          {FAQ_ITEMS.map((faq, index) => {
+            const isOpen = openIndex === index;
+            return (
+              <FadeUp key={index} delay={index * 0.08}>
+                <div 
+                  className="border-b border-white/10 hover:border-white/20 transition-colors duration-300"
+                >
+                  <button
+                    onClick={() => toggleFaq(index)}
+                    className="w-full flex items-center justify-between py-6 text-left focus:outline-none group cursor-pointer"
+                    aria-expanded={isOpen}
+                  >
+                    <span className="text-lg md:text-xl font-light text-white/90 group-hover:text-white transition-colors duration-300 pr-4">
+                      {faq.question}
+                    </span>
+                    <div className="flex-shrink-0 ml-4">
+                      <div className="relative w-8 h-8 rounded-full border border-white/10 group-hover:border-white/30 flex items-center justify-center transition-colors duration-300 bg-white/5">
+                        <div className="relative w-3.5 h-3.5 flex items-center justify-center">
+                          <span className="absolute w-3.5 h-[1.5px] bg-white transition-transform duration-300" />
+                          <span
+                            className={`absolute w-[1.5px] h-3.5 bg-white transition-transform duration-300 ${
+                              isOpen ? "rotate-90 scale-y-0" : ""
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.35, ease: [0.25, 1, 0.5, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <div className="pb-6 pr-12 text-sm md:text-base text-white/50 leading-relaxed font-light">
+                          {faq.answer}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </FadeUp>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+

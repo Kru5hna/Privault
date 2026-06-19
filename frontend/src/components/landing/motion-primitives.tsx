@@ -59,16 +59,20 @@ export function ScrollProgress() {
 
 export function AnimatedCounter({
   value,
+  start = 0,
+  prefix = "",
   suffix = "",
   duration = 2,
 }: {
   value: number;
+  start?: number;
+  prefix?: string;
   suffix?: string;
   duration?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
-  const [displayValue, setDisplayValue] = useState(0);
+  const [displayValue, setDisplayValue] = useState(start);
 
   useEffect(() => {
     if (!isInView) return;
@@ -81,7 +85,8 @@ export function AnimatedCounter({
       const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
       const eased = 1 - Math.pow(1 - progress, 3);
 
-      setDisplayValue(Math.floor(eased * value));
+      const diff = value - start;
+      setDisplayValue(Math.floor(start + eased * diff));
 
       if (progress < 1) {
         frameId = requestAnimationFrame(animate);
@@ -93,10 +98,11 @@ export function AnimatedCounter({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [isInView, value, duration]);
+  }, [isInView, value, start, duration]);
 
   return (
     <span ref={ref}>
+      {prefix}
       {displayValue}
       {suffix}
     </span>
