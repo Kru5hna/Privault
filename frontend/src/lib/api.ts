@@ -47,12 +47,6 @@ export interface TagMetadata {
   name: string;
   color: string;
   created_at: string;
-}  owner_id: string;
-  name: string;
-  encrypted_dek: string;
-  size: number;
-  created_at: string;
-  updated_at: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

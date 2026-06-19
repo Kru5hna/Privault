@@ -32,7 +32,7 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
 
       setFileType(type);
       
-      const blob = new Blob([fileBytes], { type: mimeType });
+      const blob = new Blob([fileBytes as any], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
       setObjectUrl(url);
 
