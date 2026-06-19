@@ -258,16 +258,24 @@ export default function DashboardPage() {
     setSearchQuery("");
   };
 
-  const handleDeleteFolder = async (folderId: string, folderName: string) => {
+  const handleDeleteFolder = (folderId: string, folderName: string) => {
      if (!user) return;
-     if (!confirm(`Are you sure you want to delete the folder "${folderName}" and ALL its contents? This cannot be undone.`)) return;
-     try {
-       await apiDeleteFolder(user.sessionToken, folderId);
-       const fldrs = await apiListFolders(user.sessionToken, currentFolderId);
-       setFolders(fldrs);
-     } catch (err: any) {
-       toast.error(`Delete folder failed: ${err.message}`);
-     }
+     toast.error(`Delete folder "${folderName}" and all contents?`, {
+       action: {
+         label: 'Confirm Delete',
+         onClick: async () => {
+           try {
+             await apiDeleteFolder(user.sessionToken, folderId);
+             const fldrs = await apiListFolders(user.sessionToken, currentFolderId);
+             setFolders(fldrs);
+             toast.success("Folder deleted securely");
+           } catch (err: any) {
+             toast.error(`Delete folder failed: ${err.message}`);
+           }
+         }
+       },
+       duration: 10000,
+     });
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -357,23 +365,31 @@ export default function DashboardPage() {
   };
 
   // Handle delete
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!user) return;
     const currentUser = user;
-    if (!confirm("Are you sure you want to delete this document?")) return;
-
-    try {
-      if (isSandbox) {
-        setDemoDocs((prev) => prev.filter((d) => d.id !== id));
-      } else {
-        await apiDeleteDocument(currentUser.sessionToken, id);
-        // Refresh docs
-        const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
-        setDocuments(docs);
-      }
-    } catch (err: any) {
-      toast.error(`Delete failed: ${err.message}`);
-    }
+    
+    toast.error("Permanently delete this document?", {
+       action: {
+         label: 'Confirm Delete',
+         onClick: async () => {
+           try {
+             if (isSandbox) {
+               setDemoDocs((prev) => prev.filter((d) => d.id !== id));
+             } else {
+               await apiDeleteDocument(currentUser.sessionToken, id);
+               // Refresh docs
+               const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
+               setDocuments(docs);
+               toast.success("Document deleted securely");
+             }
+           } catch (err: any) {
+             toast.error(`Delete failed: ${err.message}`);
+           }
+         }
+       },
+       duration: 10000,
+    });
   };
 
   // Filter documents by search query and tags
