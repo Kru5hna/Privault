@@ -2,6 +2,7 @@ mod auth;
 mod documents;
 mod error;
 mod folders;
+mod shares;
 mod tags;
 
 use axum::{routing::get, Json, Router};
@@ -73,6 +74,7 @@ async fn main() {
         .nest("/api/auth", auth::router())
         .nest("/api/documents", documents::router())
         .nest("/api/folders", folders::router())
+        .nest("/api/shares", shares::router())
         .nest("/api/tags", tags::router())
         .with_state(state)
         .layer(cors);
