@@ -168,3 +168,29 @@ pub async fn rename_folder(
         None => Err(AppError::NotFound("Folder not found".to_string())),
     }
 }
+
+/// List all folders owned by the logged-in user
+pub async fn list_all_folders(
+    session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<FolderMetadata>>, AppError> {
+    let folders = sqlx::query_as!(
+        FolderMetadata,
+        r#"
+        SELECT id, owner_id, parent_id, name, created_at
+        FROM folders
+        WHERE owner_id = $1
+        ORDER BY name ASC
+        "#,
+        session.user_id
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to list all folders: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    Ok(Json(folders))
+}
+
