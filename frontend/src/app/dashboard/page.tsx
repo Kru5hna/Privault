@@ -27,6 +27,7 @@ import { TagBadge } from "@/components/tag-badge";
 import { FilePreviewModal } from "@/components/file-preview-modal";
 import { FolderSidebar } from "@/components/folder-sidebar";
 import { ShareModal } from "@/components/share-modal";
+import { SharedLinksPanel } from "@/components/shared-links-panel";
 import { Menu, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -757,10 +758,7 @@ export default function DashboardPage() {
           </main>
         ) : (
           <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
-            {/* Shared Links Panel Component Placeholder */}
-            <div className="panel-card p-8 text-center text-xs tracking-widest uppercase text-white/20">
-              Shared Links Manager — Coming in next step
-            </div>
+            <SharedLinksPanel user={user} />
           </main>
         )}
       </div>
