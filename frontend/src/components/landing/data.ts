@@ -116,24 +116,45 @@ export const HERO_DOCUMENTS = [
 ] as const;
 
 export const FAQ_ITEMS = [
-  {
-    question: "How does Privault guarantee my files are secure?",
-    answer: "Privault uses client-side, zero-knowledge encryption. Every file is encrypted in your browser using a unique, randomly generated Document Encryption Key (AES-256-GCM) before it is uploaded. The key itself is wrapped with your RSA-2048 public key, ensuring that only your private key can decrypt it.",
-  },
-  {
-    question: "Where are my private keys and password stored?",
-    answer: "Your master password and private keys are never stored on our servers. When you log in, your browser derives a Key Encryption Key (KEK) using PBKDF2. This KEK is used locally to decrypt your RSA private key, which is kept strictly in your browser's temporary memory (React state) and discarded when you log out or close the tab.",
-  },
-  {
-    question: "What happens if I forget my master password?",
-    answer: "Since we operate under a strict zero-knowledge model, we do not store your password or have access to your recovery keys. If you lose your master password, it is mathematically impossible for us to recover your files. We recommend using a password manager to store your credentials securely.",
-  },
-  {
-    question: "How do shareable links work without compromising my vault?",
-    answer: "When you create a share link, a unique link key is generated client-side. The file's Document Encryption Key (DEK) is encrypted with this link key, and the link key is appended to the URL fragment (#). The server only stores the encrypted DEK. Because the fragment (#) is never sent to the server, only someone with the complete URL can decrypt the file.",
-  },
-  {
-    question: "Can the server administrator inspect or tamper with my files?",
-    answer: "No. The server only receives and stores raw ciphertexts (encrypted blobs) and wrapped keys. Since the decryption keys are generated and held purely on the client side, even a malicious database administrator or server owner has zero access to your actual plaintext data.",
-  },
+{
+question: "Can Privault see my files?",
+answer:
+"No. Your files are encrypted before they leave your device and can only be decrypted by you. Privault stores encrypted data, not readable documents.",
+},
+{
+question: "How is Privault different from Google Drive or Dropbox?",
+answer:
+"Traditional cloud storage providers can access your files if needed. Privault encrypts files before upload, so even we cannot see, read, or scan the contents of your documents.",
+},
+{
+question: "What happens if I forget my master password?",
+answer:
+"Because Privault is built around privacy, we cannot recover your master password or unlock your vault for you. We strongly recommend storing it in a trusted password manager.",
+},
+{
+question: "Can I securely share files with other people?",
+answer:
+"Yes. You can generate secure share links with optional expiration dates and download limits. Anyone with the complete link can access the file without creating an account.",
+},
+{
+question: "What happens if Privault's servers are hacked?",
+answer:
+"Attackers would only obtain encrypted files. Without the required encryption keys, the contents remain unreadable and cannot be accessed.",
+},
+{
+question: "Are my files encrypted while uploading?",
+answer:
+"Yes. Files are encrypted in your browser before upload, remain encrypted while being transferred, and stay encrypted while stored on our servers.",
+},
+{
+question: "Can Privault employees access my documents?",
+answer:
+"No. Decryption happens on your device, not on our servers. Even system administrators cannot view the contents of your files.",
+},
+{
+question: "Who owns my data?",
+answer:
+"You do. Your files remain your property at all times. Privault never claims ownership of your content and cannot access it.",
+},
 ] as const;
+
