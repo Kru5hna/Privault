@@ -24,6 +24,7 @@ import { ScrambledText } from "@/components/scrambled-text";
 import { FileDetailsPanel } from "@/components/file-details-panel";
 import { TagBadge } from "@/components/tag-badge";
 import { FilePreviewModal } from "@/components/file-preview-modal";
+import { toast } from "sonner";
 
 // Fallback seed documents for sandbox demo
 const DEMO_DOCUMENTS = [
@@ -226,7 +227,7 @@ export default function DashboardPage() {
     if (!user || !newFolderName.trim()) return;
     try {
       if (isSandbox) {
-         alert("Folders are not supported in sandbox mode.");
+         toast.error("Folders are not supported in sandbox mode.");
          setIsCreatingFolder(false);
          setNewFolderName("");
          return;
@@ -237,7 +238,7 @@ export default function DashboardPage() {
       setIsCreatingFolder(false);
       setNewFolderName("");
     } catch (err: any) {
-      alert(`Failed to create folder: ${err.message}`);
+      toast.error(`Failed to create folder: ${err.message}`);
     }
   };
 
@@ -265,7 +266,7 @@ export default function DashboardPage() {
        const fldrs = await apiListFolders(user.sessionToken, currentFolderId);
        setFolders(fldrs);
      } catch (err: any) {
-       alert(`Delete folder failed: ${err.message}`);
+       toast.error(`Delete folder failed: ${err.message}`);
      }
   };
 
@@ -326,7 +327,7 @@ export default function DashboardPage() {
       link.parentNode?.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(`Decryption failed: ${err.message}`);
+      toast.error(`Decryption failed: ${err.message}`);
     }
   };
 
@@ -350,7 +351,7 @@ export default function DashboardPage() {
       const decryptedBytes = await decryptFile(ciphertext, doc.encrypted_dek, currentKey);
       setPreviewBytes(decryptedBytes as Uint8Array);
     } catch (err: any) {
-      alert(`Preview failed: ${err.message}`);
+      toast.error(`Preview failed: ${err.message}`);
       setPreviewDoc(null);
     }
   };
@@ -371,7 +372,7 @@ export default function DashboardPage() {
         setDocuments(docs);
       }
     } catch (err: any) {
-      alert(`Delete failed: ${err.message}`);
+      toast.error(`Delete failed: ${err.message}`);
     }
   };
 

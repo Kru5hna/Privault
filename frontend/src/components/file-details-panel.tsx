@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { DocumentMetadata, TagMetadata, apiListDocumentTags, apiTagDocument, apiUntagDocument, apiCreateTag } from "@/lib/api";
 import { ScrambledText } from "@/components/scrambled-text";
 import { TagBadge } from "@/components/tag-badge";
+import { toast } from "sonner";
 
 interface FileDetailsPanelProps {
   doc: DocumentMetadata | null;
@@ -86,7 +87,7 @@ export function FileDetailsPanel({ doc, isOpen, onClose, user, allTags, onTagAdd
       setIsAddingTag(false);
     } catch (err) {
       console.error(err);
-      alert("Failed to add tag.");
+      toast.error("Failed to add tag.");
     }
   };
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { AuthProvider } from "@/app/context";
 import UnlockModal from "@/components/unlock-modal";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -49,6 +50,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <UnlockModal />
+          <Toaster theme="dark" position="bottom-right" />
         </AuthProvider>
       </body>
     </html>
