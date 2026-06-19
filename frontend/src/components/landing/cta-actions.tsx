@@ -15,15 +15,17 @@ export function CtaActions() {
           className="btn-primary w-full !py-4 sm:w-auto sm:!px-10"
         >
           <span className="btn-bg" />
-          <span className="btn-text">Create Your Vault</span>
+          <span className="btn-text">{user ? "Go to Dashboard" : "Create Your Vault"}</span>
         </Link>
       </MagneticButton>
-      <Link
-        href="/login"
-        className="btn-outline w-full !text-white/40 border-white/10 sm:w-auto"
-      >
-        Sign in to existing vault
-      </Link>
+      {!user && (
+        <Link
+          href="/login"
+          className="btn-outline w-full !text-white/40 border-white/10 sm:w-auto"
+        >
+          Sign in to existing vault
+        </Link>
+      )}
     </div>
   );
 }

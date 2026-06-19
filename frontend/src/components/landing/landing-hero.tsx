@@ -97,7 +97,7 @@ export function LandingHero() {
                   className="btn-primary w-full sm:w-auto"
                 >
                   <span className="btn-bg" />
-                  <span className="btn-text">Create Vault</span>
+                  <span className="btn-text">{user ? "Go to Dashboard" : "Create Vault"}</span>
                 </Link>
               </MagneticButton>
 

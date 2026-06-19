@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useAuth } from "@/app/context";
 
 export function LandingFooter() {
+  const { user, logout } = useAuth();
+
   return (
     <footer className="bg-[#050505] border-t border-white/5 py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
@@ -43,18 +48,37 @@ export function LandingFooter() {
             <div>
               <p className="text-micro text-white/50 mb-4">Access</p>
               <div className="flex flex-col gap-3">
-                <Link
-                  href="/login"
-                  className="text-xs text-white/30 hover:text-white transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/register"
-                  className="text-xs text-white/30 hover:text-white transition-colors"
-                >
-                  Create Vault
-                </Link>
+                {user ? (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      className="text-xs text-white/30 hover:text-white transition-colors"
+                    >
+                      Dashboard
+                    </Link>
+                    <button
+                      onClick={logout}
+                      className="text-xs text-white/30 hover:text-white transition-colors text-left cursor-pointer bg-transparent border-none p-0"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      className="text-xs text-white/30 hover:text-white transition-colors"
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      href="/register"
+                      className="text-xs text-white/30 hover:text-white transition-colors"
+                    >
+                      Create Vault
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -73,9 +97,6 @@ export function LandingFooter() {
           <div className="text-[10px] text-white/20 tracking-wider">
             &copy; 2026 PRIVAULT. All rights reserved.
           </div>
-          {/* <div className="text-[10px] text-white/20 tracking-wider">
-            AES-256-GCM - RSA-2048-OAEP - PBKDF2 - WebCrypto API
-          </div> */}
         </div>
       </div>
     </footer>

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useAuth } from "@/app/context";
 import {
   LANDING_STATS,
   SECURITY_STRATEGIES,
@@ -53,6 +56,7 @@ function StatsBand() {
 }
 
 function MissionSection() {
+  const { user } = useAuth();
   return (
     <section
       id="about"
@@ -90,10 +94,10 @@ function MissionSection() {
             </FadeUp>
             <FadeUp delay={0.45}>
               <Link
-                href="/register"
+                href={user ? "/dashboard" : "/register"}
                 className="inline-flex items-center gap-2 mt-8 text-micro text-white/60 hover:text-[#E41613] transition-colors group"
               >
-                Start encrypting today
+                {user ? "Go to Dashboard" : "Start encrypting today"}
                 <span className="inline-block transition-transform group-hover:translate-x-1">
                   &rarr;
                 </span>
@@ -107,6 +111,7 @@ function MissionSection() {
 }
 
 function SpecificationsSection() {
+  const { user } = useAuth();
   return (
     <section
       id="metrics"
@@ -135,9 +140,9 @@ function SpecificationsSection() {
             </FadeUp>
             <FadeUp delay={0.3}>
               <MagneticButton>
-                <Link href="/register" className="btn-primary">
+                <Link href={user ? "/dashboard" : "/register"} className="btn-primary">
                   <span className="btn-bg" />
-                  <span className="btn-text">Create Secure Vault</span>
+                  <span className="btn-text">{user ? "Go to Dashboard" : "Create Secure Vault"}</span>
                 </Link>
               </MagneticButton>
             </FadeUp>
