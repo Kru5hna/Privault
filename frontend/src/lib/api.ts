@@ -41,6 +41,18 @@ export interface FolderMetadata {
   created_at: string;
 }
 
+export interface ShareLinkMetadata {
+  id: string;
+  document_id: string;
+  document_name: string;
+  document_size: number;
+  encrypted_dek: string;
+  expires_at: string | null;
+  download_limit: number | null;
+  downloads_count: number;
+  created_at: string | null;
+}
+
 export interface TagMetadata {
   id: string;
   owner_id: string;
@@ -379,3 +391,85 @@ export async function apiDeleteDocument(
   });
   return handleResponse(res);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Share Link Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function apiCreateShareLink(
+  token: string,
+  documentId: string,
+  encryptedDek: string,
+  expiresAt?: string | null,
+  downloadLimit?: number | null
+): Promise<ShareLinkMetadata> {
+  const res = await fetch(`${API_BASE_URL}/api/shares`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      document_id: documentId,
+      encrypted_dek: encryptedDek,
+      expires_at: expiresAt || null,
+      download_limit: downloadLimit || null,
+    }),
+  });
+  return handleResponse(res);
+}
+
+export async function apiGetShareLink(shareId: string): Promise<ShareLinkMetadata> {
+  const res = await fetch(`${API_BASE_URL}/api/shares/${shareId}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+export async function apiDownloadSharedDocument(shareId: string): Promise<Uint8Array> {
+  const res = await fetch(`${API_BASE_URL}/api/shares/${shareId}/download`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+
+  if (!res.ok) {
+    let errorMessage = "Download failed";
+    try {
+      const body = await res.json();
+      errorMessage = body.error || body.message || errorMessage;
+    } catch {
+      // Use default
+    }
+    throw new Error(errorMessage);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  return new Uint8Array(arrayBuffer);
+}
+
+export async function apiRevokeShareLink(
+  token: string,
+  shareId: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/shares/${shareId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+export async function apiListMyShareLinks(token: string): Promise<ShareLinkMetadata[]> {
+  const res = await fetch(`${API_BASE_URL}/api/shares/mine`, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+/** Fetch all folders recursively (no parent scoping) */
+export async function apiListAllFolders(token: string): Promise<FolderMetadata[]> {
+  const res = await fetch(`${API_BASE_URL}/api/folders/all`, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
