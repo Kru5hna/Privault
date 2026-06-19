@@ -261,6 +261,7 @@ export default function DashboardPage() {
   const handleDeleteFolder = (folderId: string, folderName: string) => {
      if (!user) return;
      toast.error(`Delete folder "${folderName}" and all contents?`, {
+       icon: null,
        action: {
          label: 'Confirm Delete',
          onClick: async () => {
@@ -374,6 +375,7 @@ export default function DashboardPage() {
     const currentUser = user;
     
     toast.error("Permanently delete this document?", {
+       icon: null,
        action: {
          label: 'Confirm Delete',
          onClick: async () => {
