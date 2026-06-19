@@ -177,44 +177,51 @@ export default function DashboardPage() {
     );
   }
 
-  // Handle file encryption and upload
-  const handleFileUpload = async (file: File) => {
+  // Handle file encryption and upload for multiple files
+  const handleMultipleFilesUpload = async (files: FileList | File[]) => {
     if (!user || !privateKey) return;
     const currentUser = user;
     const currentKey = privateKey;
     setUploadError(null);
-    setUploadState("encrypting");
     try {
-      // 1. Read file bytes
-      const fileBytes = new Uint8Array(await file.arrayBuffer());
-
-      // 2. Generate RSA public key from private key
+      // 1. Generate RSA public key from private key once for the batch
+      setUploadState("encrypting");
       const rsaPublicKey = await getPublicKeyFromPrivateKey(currentKey);
 
-      // 3. Encrypt file using Web Crypto
-      const { ciphertext, encryptedDek } = await encryptFile(fileBytes, rsaPublicKey);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // 2. Read file bytes
+        const fileBytes = new Uint8Array(await file.arrayBuffer());
 
-      setUploadState("uploading");
+        // 3. Encrypt file using Web Crypto
+        const { ciphertext, encryptedDek } = await encryptFile(fileBytes, rsaPublicKey);
 
-      if (isSandbox) {
-        // Mock save to sandbox state
-        const newDoc: SandboxDocument = {
-          id: `sandbox-doc-${Date.now()}`,
-          owner_id: currentUser.userId,
-          name: file.name,
-          size: file.size,
-          folder_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          encrypted_dek: encryptedDek,
-          ciphertext,
-        };
-        setDemoDocs((prev) => [newDoc, ...prev]);
-      } else {
-        // Send encrypted payload to backend
-        const blob = new Blob([ciphertext as unknown as BlobPart], { type: "application/octet-stream" });
-        await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek, currentFolderId);
-        // Refresh documents from server
+        setUploadState("uploading");
+
+        if (isSandbox) {
+          // Mock save to sandbox state
+          const newDoc: SandboxDocument = {
+            id: `sandbox-doc-${Date.now()}-${i}`,
+            owner_id: currentUser.userId,
+            name: file.name,
+            size: file.size,
+            folder_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            encrypted_dek: encryptedDek,
+            ciphertext,
+          };
+          setDemoDocs((prev) => [newDoc, ...prev]);
+        } else {
+          // Send encrypted payload to backend
+          const blob = new Blob([ciphertext as unknown as BlobPart], { type: "application/octet-stream" });
+          await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek, currentFolderId);
+        }
+      }
+
+      // 4. Refresh documents list once after all uploads finish
+      if (!isSandbox) {
         const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
         setDocuments(docs);
       }
@@ -227,7 +234,7 @@ export default function DashboardPage() {
     } catch (err: unknown) {
       console.error(err);
       const errorObject = err as Error;
-      setUploadError(errorObject?.message || "Failed to encrypt or upload file.");
+      setUploadError(errorObject?.message || "Failed to encrypt or upload files.");
       setUploadState("idle");
     }
   };
@@ -281,7 +288,7 @@ export default function DashboardPage() {
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleFileUpload(e.target.files[0]);
+      handleMultipleFilesUpload(e.target.files);
     }
   };
 
@@ -304,7 +311,7 @@ export default function DashboardPage() {
     e.preventDefault();
     setIsDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileUpload(e.dataTransfer.files[0]);
+      handleMultipleFilesUpload(e.dataTransfer.files);
     }
   };
 
@@ -556,6 +563,7 @@ export default function DashboardPage() {
                 ref={fileInputRef}
                 type="file"
                 onChange={onFileChange}
+                multiple
                 className="hidden"
               />
               
