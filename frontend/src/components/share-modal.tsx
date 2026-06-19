@@ -7,7 +7,7 @@ import {
   apiListMyShareLinks, 
   apiRevokeShareLink 
 } from "@/lib/api";
-import { encryptDekForSharing } from "@/lib/crypto";
+import { encryptDekForSharing, decryptOwnerLinkKey } from "@/lib/crypto";
 import { 
   X, 
   Copy, 
@@ -95,7 +95,7 @@ export function ShareModal({
     setGenerating(true);
     try {
       // 1. Re-encrypt the DEK with a random symmetric Link Key in the browser
-      const { linkKey, reEncryptedDek } = await encryptDekForSharing(
+      const { linkKey, reEncryptedDek, ownerEncryptedLinkKey } = await encryptDekForSharing(
         doc.encrypted_dek,
         privateKey
       );
@@ -110,7 +110,8 @@ export function ShareModal({
         doc.id,
         reEncryptedDek,
         expiresAt,
-        limit
+        limit,
+        ownerEncryptedLinkKey
       );
 
       // 4. Construct URL with Link Key in the hash fragment (never sent to server!)
@@ -334,13 +335,46 @@ export function ShareModal({
                       </div>
                     </div>
                     
-                    <button
-                      onClick={() => handleRevoke(s.id)}
-                      className="p-1.5 rounded text-[#8E929F] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                      title="Revoke Share"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {s.owner_encrypted_link_key ? (
+                        <button
+                          onClick={async () => {
+                            if (!privateKey) return;
+                            try {
+                              const decryptedKey = await decryptOwnerLinkKey(s.owner_encrypted_link_key!, privateKey);
+                              const origin = window.location.origin;
+                              const shareUrl = `${origin}/share/${s.id}#${decryptedKey}`;
+                              navigator.clipboard.writeText(shareUrl);
+                              toast.success("Share link copied to clipboard");
+                            } catch (err) {
+                              console.error(err);
+                              toast.error("Failed to decrypt share link key.");
+                            }
+                          }}
+                          className="p-1.5 rounded text-[#8E929F] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                          title="Copy Share Link"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            toast.warning("This link was generated under an older version and cannot be recovered. Please revoke it and create a new link.");
+                          }}
+                          className="p-1.5 rounded text-white/20 cursor-not-allowed"
+                          title="Legacy link: key unrecoverable"
+                        >
+                          <Copy size={14} className="opacity-20" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRevoke(s.id)}
+                        className="p-1.5 rounded text-[#8E929F] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                        title="Revoke Share"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
