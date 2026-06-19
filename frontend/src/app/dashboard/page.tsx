@@ -13,6 +13,7 @@ import {
   apiListTags,
   apiListDocumentTags,
   apiListAllFolders,
+  apiDeleteFolderDocuments,
   DocumentMetadata,
   FolderMetadata,
   TagMetadata,
@@ -438,6 +439,40 @@ export default function DashboardPage() {
     }
   };
 
+  // Handle delete all files in folder
+  const handleDeleteAllFiles = () => {
+    if (!currentFolderId || !user) return;
+    const count = documents.length;
+
+    toast.error(`Delete ${count} files from this folder?`, {
+      description: "This will permanently delete all files in this folder from storage and database. This action cannot be undone.",
+      duration: 10000,
+      action: {
+        label: "Delete All",
+        onClick: async () => {
+          try {
+            if (isSandbox) {
+              setDemoDocs([]);
+              toast.success(`Deleted ${count} files successfully (Sandbox)`);
+            } else {
+              await apiDeleteFolderDocuments(user.sessionToken, currentFolderId);
+              const docs = await apiListDocuments(user.sessionToken, currentFolderId);
+              setDocuments(docs);
+              toast.success(`Deleted ${count} files successfully`);
+            }
+          } catch (err: any) {
+            console.error(err);
+            toast.error(err?.message || "Failed to delete all files");
+          }
+        }
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}
+      }
+    });
+  };
+
   // Handle delete
   const handleDelete = (id: string) => {
     if (!user) return;
@@ -519,19 +554,20 @@ export default function DashboardPage() {
         setViewMode={setViewMode}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        sessionToken={user?.sessionToken}
       />
 
       {/* Main panel container */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className={`flex-1 flex flex-col min-w-0 min-h-screen transition-[padding] duration-300 ${sidebarOpen ? "md:pl-64" : "md:pl-0"}`}>
         {/* Header Panel */}
         <header className="sticky top-0 z-30 border-b border-white/5 bg-[#15161A]/80 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-5xl flex-col items-start justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setSidebarOpen(true)}
-                className="p-1.5 -ml-1.5 text-[#8E929F] hover:text-white rounded hover:bg-white/5 md:hidden cursor-pointer"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-1.5 -ml-1.5 text-[#8E929F] hover:text-white rounded hover:bg-white/5 cursor-pointer"
               >
-                <Menu size={20} />
+                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
               <span className="font-serif text-xl font-bold tracking-[0.25em] text-[#F5F5F0]">
                 PRIVAULT
@@ -577,25 +613,35 @@ export default function DashboardPage() {
                 </h1>
                 
                 {/* Breadcrumb Navigation */}
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm font-medium tracking-wider text-white/50">
-                  {folderPath.map((crumb, idx) => (
-                    <React.Fragment key={crumb.id || "root"}>
-                      {idx > 0 && <span className="text-white/20">/</span>}
-                      <button
-                        onClick={() => {
-                          setCurrentFolderId(crumb.id);
-                          const existingIdx = folderPath.findIndex((f) => f.id === crumb.id);
-                          if (existingIdx >= 0) {
-                            setFolderPath(folderPath.slice(0, existingIdx + 1));
-                          }
-                          setSearchQuery("");
-                        }}
-                        className={`hover:text-white transition-colors cursor-pointer ${idx === folderPath.length - 1 ? "text-white" : ""}`}
-                      >
-                        {crumb.name}
-                      </button>
-                    </React.Fragment>
-                  ))}
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm font-medium tracking-wider text-white/50">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {folderPath.map((crumb, idx) => (
+                      <React.Fragment key={crumb.id || "root"}>
+                        {idx > 0 && <span className="text-white/20">/</span>}
+                        <button
+                          onClick={() => {
+                            setCurrentFolderId(crumb.id);
+                            const existingIdx = folderPath.findIndex((f) => f.id === crumb.id);
+                            if (existingIdx >= 0) {
+                              setFolderPath(folderPath.slice(0, existingIdx + 1));
+                            }
+                            setSearchQuery("");
+                          }}
+                          className={`hover:text-white transition-colors cursor-pointer ${idx === folderPath.length - 1 ? "text-white" : ""}`}
+                        >
+                          {crumb.name}
+                        </button>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  {currentFolderId && documents.length > 0 && (
+                    <button
+                      onClick={handleDeleteAllFiles}
+                      className="text-xs font-bold uppercase tracking-widest text-red-500 hover:text-white hover:bg-red-600/10 border border-red-500/20 hover:border-red-500 px-3 py-1 transition-all cursor-pointer rounded"
+                    >
+                      Delete All Files
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -742,7 +788,7 @@ export default function DashboardPage() {
                         <th className="pb-4 pr-4 font-bold">Name</th>
                         <th className="pb-4 pr-4 font-bold">Size</th>
                         <th className="pb-4 pr-4 font-bold">Seal Date</th>
-                        <th className="pb-4 text-right font-bold">Actions</th>
+                        <th className="pb-4 text-right font-bold w-[380px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -788,8 +834,8 @@ export default function DashboardPage() {
                           <td data-label="Seal Date" className="py-4 pr-4 text-xs text-white/40">
                             {formatDate(doc.created_at)}
                           </td>
-                          <td data-label="Actions" className="py-4 text-right">
-                            <div className="flex flex-wrap justify-start gap-4 sm:justify-end items-center">
+                          <td data-label="Actions" className="py-4 text-right whitespace-nowrap w-[380px]">
+                            <div className="flex flex-nowrap justify-end gap-4 items-center">
                               <button
                                 onClick={(e) => {
                                    e.stopPropagation();
@@ -811,22 +857,22 @@ export default function DashboardPage() {
                               <button
                                 onClick={(e) => {
                                    e.stopPropagation();
-                                   handleDelete(doc.id);
-                                }}
-                                className="btn-delete-tactical relative cursor-pointer"
-                              >
-                                <span className="btn-bg" />
-                                <span className="btn-text">Delete</span>
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                   e.stopPropagation();
                                    setShareDoc(doc);
                                 }}
                                 className="text-xs font-bold uppercase tracking-widest text-[#F5F5F0]/70 hover:text-[#E41613] hover:underline underline-offset-4 decoration-[#E41613] decoration-2 transition-all cursor-pointer flex items-center gap-1"
                               >
                                 <Share2 size={12} />
                                 Share
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                   e.stopPropagation();
+                                   handleDelete(doc.id);
+                                }}
+                                className="btn-delete-tactical relative cursor-pointer"
+                              >
+                                <span className="btn-bg" />
+                                <span className="btn-text">Delete</span>
                               </button>
                             </div>
                           </td>

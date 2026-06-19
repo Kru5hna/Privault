@@ -12,4 +12,5 @@ pub fn router() -> Router<crate::AppState> {
         .route("/", post(handlers::upload_document))
         .route("/:id", get(handlers::download_document))
         .route("/:id", delete(handlers::delete_document))
+        .route("/folder/:folder_id", delete(handlers::delete_folder_documents))
 }

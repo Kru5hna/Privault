@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
-import { FolderMetadata } from "@/lib/api";
+import { FolderMetadata, apiGetFolderStats } from "@/lib/api";
+import { toast } from "sonner";
 import { 
   Folder, 
   FolderPlus, 
@@ -30,6 +31,7 @@ interface FolderSidebarProps {
   setViewMode: (mode: "vault" | "shares") => void;
   isOpen: boolean;
   onClose: () => void;
+  sessionToken?: string;
 }
 
 export function FolderSidebar({
@@ -43,6 +45,7 @@ export function FolderSidebar({
   setViewMode,
   isOpen,
   onClose,
+  sessionToken,
 }: FolderSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showNewFolderInput, setShowNewFolderInput] = useState<string | null>(null); // folderId or "root" or null
@@ -226,10 +229,41 @@ export function FolderSidebar({
               {onDeleteFolder && (
                 <button
                   title="Delete"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete folder "${folder.name}" and all contents?`)) {
-                      onDeleteFolder(folder.id);
+                    if (!sessionToken) return;
+                    try {
+                      const stats = await apiGetFolderStats(folder.id, sessionToken);
+                      toast.error(`Delete folder "${folder.name}"?`, {
+                        description: `This will permanently delete:\n• ${stats.file_count} files\n• ${stats.subfolder_count} subfolders`,
+                        duration: 10000,
+                        action: {
+                          label: "Delete",
+                          onClick: () => {
+                            onDeleteFolder(folder.id);
+                          }
+                        },
+                        cancel: {
+                          label: "Cancel",
+                          onClick: () => {}
+                        }
+                      });
+                    } catch (err) {
+                      console.error("Failed to load folder stats:", err);
+                      toast.error(`Delete folder "${folder.name}"?`, {
+                        description: "Are you sure you want to delete this folder and all its contents?",
+                        duration: 10000,
+                        action: {
+                          label: "Delete",
+                          onClick: () => {
+                            onDeleteFolder(folder.id);
+                          }
+                        },
+                        cancel: {
+                          label: "Cancel",
+                          onClick: () => {}
+                        }
+                      });
                     }
                   }}
                   className="p-1 rounded text-[#8E929F] hover:text-red-500 hover:bg-[#252830]"
@@ -283,7 +317,7 @@ export function FolderSidebar({
 
       {/* Sidebar panel */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-40 w-64 bg-[#111215] border-r border-[#1E2026] flex flex-col transition-transform duration-300 md:relative md:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-40 w-64 bg-[#111215] border-r border-[#1E2026] flex flex-col transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

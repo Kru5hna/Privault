@@ -473,3 +473,32 @@ export async function apiListAllFolders(token: string): Promise<FolderMetadata[]
   return handleResponse(res);
 }
 
+export interface FolderStats {
+  file_count: number;
+  subfolder_count: number;
+}
+
+/** Get folder statistics recursively */
+export async function apiGetFolderStats(
+  folderId: string,
+  token: string
+): Promise<FolderStats> {
+  const res = await fetch(`${API_BASE_URL}/api/folders/${folderId}/stats`, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+/** Delete all documents in a folder */
+export async function apiDeleteFolderDocuments(
+  token: string,
+  folderId: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/documents/folder/${folderId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+

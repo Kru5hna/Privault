@@ -26,7 +26,7 @@ pub async fn upload_document(
     let mut file_bytes = Vec::new();
     let mut folder_id: Option<Uuid> = None;
 
-    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
+    while let Some(field) = multipart.next_field().await? {
         let field_name = field.name().unwrap_or("").to_string();
 
         if field_name == "name" {
@@ -222,5 +222,84 @@ pub async fn delete_document(
 
     Ok(Json(serde_json::json!({
         "message": "Document deleted successfully"
+    })))
+}
+
+/// Delete all documents in a specific folder (DB and Disk)
+pub async fn delete_folder_documents(
+    session: AuthSession,
+    Path(folder_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // 1. Verify ownership of the folder
+    let folder_exists = sqlx::query!(
+        "SELECT id FROM folders WHERE id = $1 AND owner_id = $2",
+        folder_id,
+        session.user_id
+    )
+    .fetch_optional(&state.db)
+    .await?;
+
+    if folder_exists.is_none() {
+        return Err(AppError::NotFound("Folder not found".to_string()));
+    }
+
+    // 2. Find all documents directly in this folder
+    let docs = sqlx::query!(
+        r#"
+        SELECT id, storage_path FROM documents
+        WHERE folder_id = $1 AND owner_id = $2
+        "#,
+        folder_id,
+        session.user_id
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error finding documents for folder delete: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    if docs.is_empty() {
+        return Ok(Json(serde_json::json!({
+            "message": "No documents found in folder to delete"
+        })));
+    }
+
+    let mut tx = state.db.begin().await.map_err(|e| {
+        tracing::error!("Failed to start transaction: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    // 3. Delete from DB
+    sqlx::query!(
+        r#"
+        DELETE FROM documents
+        WHERE folder_id = $1 AND owner_id = $2
+        "#,
+        folder_id,
+        session.user_id
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error deleting documents in folder: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Failed to commit transaction: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    // 4. Delete physical files from disk
+    for doc in docs {
+        if let Err(e) = remove_file(&doc.storage_path).await {
+            tracing::warn!("Failed to delete file from disk: {}. Error: {}", doc.storage_path, e);
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "message": "All documents in folder deleted successfully"
     })))
 }

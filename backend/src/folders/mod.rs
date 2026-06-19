@@ -15,4 +15,5 @@ pub fn router() -> Router<crate::AppState> {
         .route("/all", get(handlers::list_all_folders))
         .route("/:id", delete(handlers::delete_folder))
         .route("/:id", patch(handlers::rename_folder))
+        .route("/:id/stats", get(handlers::get_folder_stats))
 }

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/app/context";
+import { usePathname } from "next/navigation";
 
 /**
  * Unlock Modal — shown when the user has a valid session but their
@@ -11,9 +12,10 @@ export default function UnlockModal() {
   const { status, user, unlock, logout, error, clearError } = useAuth();
   const [password, setPassword] = useState("");
   const [unlocking, setUnlocking] = useState(false);
+  const pathname = usePathname();
 
-  // Only render when in locked state
-  if (status !== "locked") return null;
+  // Only render when in locked state and not on a public share page
+  if (status !== "locked" || pathname?.startsWith("/share/")) return null;
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();

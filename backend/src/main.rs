@@ -77,7 +77,8 @@ async fn main() {
         .nest("/api/shares", shares::router())
         .nest("/api/tags", tags::router())
         .with_state(state)
-        .layer(cors);
+        .layer(cors)
+        .layer(axum::extract::DefaultBodyLimit::max(100 * 1024 * 1024));
 
     // Bind and serve
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());

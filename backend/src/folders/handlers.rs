@@ -103,12 +103,62 @@ pub async fn list_folders(
     Ok(Json(folders))
 }
 
-/// Delete a folder (and cascade delete its contents via DB constraint)
+/// Delete a folder and all its contents recursively
 pub async fn delete_folder(
     session: AuthSession,
     Path(folder_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    let mut tx = state.db.begin().await.map_err(|e| {
+        tracing::error!("Failed to start transaction: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    // 1. Find all documents in the folder and its subfolders
+    let docs = sqlx::query!(
+        r#"
+        WITH RECURSIVE subfolders AS (
+            SELECT id FROM folders WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT f.id FROM folders f
+            JOIN subfolders sf ON f.parent_id = sf.id
+        )
+        SELECT id, storage_path FROM documents
+        WHERE folder_id IN (SELECT id FROM subfolders)
+        "#,
+        folder_id,
+        session.user_id
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error finding documents for folder delete: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    // 2. Delete documents from database
+    sqlx::query!(
+        r#"
+        WITH RECURSIVE subfolders AS (
+            SELECT id FROM folders WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT f.id FROM folders f
+            JOIN subfolders sf ON f.parent_id = sf.id
+        )
+        DELETE FROM documents
+        WHERE folder_id IN (SELECT id FROM subfolders)
+        "#,
+        folder_id,
+        session.user_id
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error deleting documents for folder delete: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    // 3. Delete the folder itself (cascade deletes subfolders)
     let result = sqlx::query!(
         r#"
         DELETE FROM folders 
@@ -117,7 +167,7 @@ pub async fn delete_folder(
         folder_id,
         session.user_id
     )
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(|e| {
         tracing::error!("DB error deleting folder: {}", e);
@@ -128,9 +178,75 @@ pub async fn delete_folder(
         return Err(AppError::NotFound("Folder not found".to_string()));
     }
 
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Failed to commit transaction: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    // 4. Delete physical files from disk
+    for doc in docs {
+        if let Err(e) = tokio::fs::remove_file(&doc.storage_path).await {
+            tracing::warn!("Failed to delete file from disk: {}. Error: {}", doc.storage_path, e);
+        }
+    }
+
     Ok(Json(serde_json::json!({
-        "message": "Folder deleted successfully"
+        "message": "Folder and contents deleted successfully"
     })))
+}
+
+#[derive(serde::Serialize)]
+pub struct FolderStats {
+    pub file_count: i64,
+    pub subfolder_count: i64,
+}
+
+/// Get folder statistics (recursive file and subfolder counts)
+pub async fn get_folder_stats(
+    session: AuthSession,
+    Path(folder_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<FolderStats>, AppError> {
+    // Check if folder exists and belongs to user
+    let folder_exists = sqlx::query!(
+        "SELECT id FROM folders WHERE id = $1 AND owner_id = $2",
+        folder_id,
+        session.user_id
+    )
+    .fetch_optional(&state.db)
+    .await?;
+
+    if folder_exists.is_none() {
+        return Err(AppError::NotFound("Folder not found".to_string()));
+    }
+
+    // Count subfolders and files recursively
+    let stats = sqlx::query!(
+        r#"
+        WITH RECURSIVE subfolders AS (
+            SELECT id FROM folders WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT f.id FROM folders f
+            JOIN subfolders sf ON f.parent_id = sf.id
+        )
+        SELECT 
+            (SELECT COUNT(*) FROM documents WHERE folder_id IN (SELECT id FROM subfolders)) as "file_count!",
+            (SELECT COUNT(*) - 1 FROM subfolders) as "subfolder_count!"
+        "#,
+        folder_id,
+        session.user_id
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error counting folder contents: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    Ok(Json(FolderStats {
+        file_count: stats.file_count,
+        subfolder_count: stats.subfolder_count,
+    }))
 }
 
 /// Rename a folder
