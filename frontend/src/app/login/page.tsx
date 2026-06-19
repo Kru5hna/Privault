@@ -31,6 +31,23 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-[#0D0E10] px-4 py-8 sm:px-6 sm:py-12 dotted-grid-dark overflow-hidden">
+      {/* Floating back link */}
+      <Link
+        href="/"
+        className="absolute top-6 left-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/50 hover:text-[#E41613] transition-colors group z-20"
+      >
+        <svg
+          className="h-4 w-4 transform transition-transform group-hover:-translate-x-1 text-[#E41613]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to Home
+      </Link>
+
       {/* Visual background details */}
       <div className="noise-overlay absolute inset-0 pointer-events-none opacity-30" />
       <div className="absolute top-1/4 left-1/4 h-72 w-72 rounded-full bg-[#E41613]/5 blur-[120px] pointer-events-none" />
