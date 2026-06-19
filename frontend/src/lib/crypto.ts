@@ -314,3 +314,84 @@ export async function getPublicKeyFromPrivateKey(
     ["encrypt", "wrapKey"]
   );
 }
+
+/** Encrypt DEK with a random symmetric Link Key for sharing */
+export async function encryptDekForSharing(
+  encryptedDekBase64: string,
+  rsaPrivateKey: CryptoKey
+): Promise<{ linkKey: string; reEncryptedDek: string }> {
+  // 1. Unwrap the DEK using the owner's RSA private key
+  const wrappedDek = base64ToUint8Array(encryptedDekBase64);
+  const dek = await window.crypto.subtle.unwrapKey(
+    "raw",
+    wrappedDek as BufferSource,
+    rsaPrivateKey,
+    { name: "RSA-OAEP" },
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["wrapKey"]
+  );
+
+  // 2. Generate a random 256-bit symmetric Link Key
+  const linkKey = await window.crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["wrapKey"]
+  );
+
+  // 3. Wrap (encrypt) the DEK with the Link Key using AES-GCM
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const wrappedDekBuffer = await window.crypto.subtle.wrapKey(
+    "raw",
+    dek,
+    linkKey,
+    { name: "AES-GCM", iv }
+  );
+
+  // 4. Combine IV + wrapped DEK bytes
+  const wrappedDekArray = new Uint8Array(wrappedDekBuffer);
+  const combined = new Uint8Array(iv.length + wrappedDekArray.length);
+  combined.set(iv, 0);
+  combined.set(wrappedDekArray, iv.length);
+
+  // 5. Export the Link Key to raw bytes to be placed in URL fragment
+  const exportedLinkKey = await window.crypto.subtle.exportKey("raw", linkKey);
+
+  return {
+    linkKey: arrayBufferToBase64(exportedLinkKey),
+    reEncryptedDek: arrayBufferToBase64(combined),
+  };
+}
+
+/** Decrypt DEK using a Link Key (on the share landing page) */
+export async function decryptDekWithLinkKey(
+  reEncryptedDekBase64: string,
+  linkKeyBase64: string
+): Promise<CryptoKey> {
+  // 1. Import the Link Key from base64
+  const linkKeyBytes = base64ToUint8Array(linkKeyBase64);
+  const linkKey = await window.crypto.subtle.importKey(
+    "raw",
+    linkKeyBytes as BufferSource,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["unwrapKey"]
+  );
+
+  // 2. Extract IV (first 12 bytes) and wrapped DEK from the re-encrypted DEK payload
+  const combined = base64ToUint8Array(reEncryptedDekBase64);
+  const iv = combined.slice(0, 12);
+  const wrappedDekBytes = combined.slice(12);
+
+  // 3. Unwrap the DEK using the Link Key
+  return window.crypto.subtle.unwrapKey(
+    "raw",
+    wrappedDekBytes as BufferSource,
+    linkKey,
+    { name: "AES-GCM", iv: iv as BufferSource },
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["decrypt"]
+  );
+}
+
