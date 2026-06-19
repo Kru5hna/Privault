@@ -51,6 +51,7 @@ export interface ShareLinkMetadata {
   download_limit: number | null;
   downloads_count: number;
   created_at: string | null;
+  owner_encrypted_link_key: string | null;
 }
 
 export interface TagMetadata {
@@ -401,7 +402,8 @@ export async function apiCreateShareLink(
   documentId: string,
   encryptedDek: string,
   expiresAt?: string | null,
-  downloadLimit?: number | null
+  downloadLimit?: number | null,
+  ownerEncryptedLinkKey?: string | null
 ): Promise<ShareLinkMetadata> {
   const res = await fetch(`${API_BASE_URL}/api/shares`, {
     method: "POST",
@@ -411,6 +413,7 @@ export async function apiCreateShareLink(
       encrypted_dek: encryptedDek,
       expires_at: expiresAt || null,
       download_limit: downloadLimit || null,
+      owner_encrypted_link_key: ownerEncryptedLinkKey || null,
     }),
   });
   return handleResponse(res);
