@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { DocumentMetadata, TagMetadata, apiListDocumentTags, apiTagDocument, apiUntagDocument, apiCreateTag } from "@/lib/api";
+import { DocumentMetadata, TagMetadata, UserSession, apiListDocumentTags, apiTagDocument, apiUntagDocument, apiCreateTag } from "@/lib/api";
 import { ScrambledText } from "@/components/scrambled-text";
 import { TagBadge } from "@/components/tag-badge";
 import { Share2 } from "lucide-react";
@@ -9,7 +9,7 @@ interface FileDetailsPanelProps {
   doc: DocumentMetadata | null;
   isOpen: boolean;
   onClose: () => void;
-  user: any;
+  user: UserSession | null;
   allTags: TagMetadata[];
   onTagAdded: (docId: string, tags: TagMetadata[]) => void;
   onShare?: (doc: DocumentMetadata) => void;
@@ -23,7 +23,9 @@ export function FileDetailsPanel({ doc, isOpen, onClose, user, allTags, onTagAdd
   const [newTagColor, setNewTagColor] = useState("#E41613");
 
   useEffect(() => {
-    setMounted(true);
+    setTimeout(() => {
+      setMounted(true);
+    }, 0);
   }, []);
 
   // Fetch doc tags when panel opens

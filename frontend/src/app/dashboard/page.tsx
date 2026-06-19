@@ -11,9 +11,6 @@ import {
   apiDeleteFolder,
   apiRenameFolder,
   apiListTags,
-  apiCreateTag,
-  apiTagDocument,
-  apiUntagDocument,
   apiListDocumentTags,
   apiListAllFolders,
   DocumentMetadata,
@@ -30,6 +27,10 @@ import { ShareModal } from "@/components/share-modal";
 import { SharedLinksPanel } from "@/components/shared-links-panel";
 import { Menu, Share2 } from "lucide-react";
 import { toast } from "sonner";
+
+interface SandboxDocument extends DocumentMetadata {
+  ciphertext?: Uint8Array;
+}
 
 // Fallback seed documents for sandbox demo
 const DEMO_DOCUMENTS = [
@@ -72,7 +73,7 @@ export default function DashboardPage() {
   const [previewDoc, setPreviewDoc] = useState<{name: string} | null>(null);
   const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
 
-  const [demoDocs, setDemoDocs] = useState<any[]>([]);
+  const [demoDocs, setDemoDocs] = useState<SandboxDocument[]>([]);
   const [isSandbox, setIsSandbox] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [uploadState, setUploadState] = useState<"idle" | "encrypting" | "uploading" | "complete">("idle");
@@ -139,6 +140,7 @@ export default function DashboardPage() {
                     owner_id: doc.owner_id,
                     name: doc.name,
                     size: doc.size,
+                    folder_id: null,
                     created_at: doc.created_at,
                     updated_at: doc.updated_at,
                     encrypted_dek: encryptedDek,
@@ -196,11 +198,12 @@ export default function DashboardPage() {
 
       if (isSandbox) {
         // Mock save to sandbox state
-        const newDoc = {
+        const newDoc: SandboxDocument = {
           id: `sandbox-doc-${Date.now()}`,
           owner_id: currentUser.userId,
           name: file.name,
           size: file.size,
+          folder_id: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           encrypted_dek: encryptedDek,
@@ -209,7 +212,7 @@ export default function DashboardPage() {
         setDemoDocs((prev) => [newDoc, ...prev]);
       } else {
         // Send encrypted payload to backend
-        const blob = new Blob([ciphertext as any], { type: "application/octet-stream" });
+        const blob = new Blob([ciphertext as unknown as BlobPart], { type: "application/octet-stream" });
         await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek, currentFolderId);
         // Refresh documents from server
         const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
@@ -221,9 +224,10 @@ export default function DashboardPage() {
          setUploadState("idle");
       }, 2000);
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setUploadError(err.message || "Failed to encrypt or upload file.");
+      const errorObject = err as Error;
+      setUploadError(errorObject?.message || "Failed to encrypt or upload file.");
       setUploadState("idle");
     }
   };
@@ -239,8 +243,9 @@ export default function DashboardPage() {
       const fldrs = await apiListAllFolders(user.sessionToken);
       setAllFolders(fldrs);
       toast.success("Folder created successfully");
-    } catch (err: any) {
-      toast.error(`Failed to create folder: ${err.message}`);
+    } catch (err: unknown) {
+      const errorObject = err as Error;
+      toast.error(`Failed to create folder: ${errorObject?.message || "Unknown error"}`);
     }
   };
 
@@ -255,8 +260,9 @@ export default function DashboardPage() {
       const fldrs = await apiListAllFolders(user.sessionToken);
       setAllFolders(fldrs);
       toast.success("Folder deleted securely");
-    } catch (err: any) {
-      toast.error(`Delete folder failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errorObject = err as Error;
+      toast.error(`Delete folder failed: ${errorObject?.message || "Unknown error"}`);
     }
   };
 
@@ -267,8 +273,9 @@ export default function DashboardPage() {
       const fldrs = await apiListAllFolders(user.sessionToken);
       setAllFolders(fldrs);
       toast.success("Folder renamed successfully");
-    } catch (err: any) {
-      toast.error(`Rename folder failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errorObject = err as Error;
+      toast.error(`Rename folder failed: ${errorObject?.message || "Unknown error"}`);
     }
   };
 
@@ -302,7 +309,7 @@ export default function DashboardPage() {
   };
 
   // Handle download and decrypt
-  const handleDownload = async (doc: any) => {
+  const handleDownload = async (doc: SandboxDocument) => {
     if (!user || !privateKey) return;
     const currentUser = user;
     const currentKey = privateKey;
@@ -310,7 +317,7 @@ export default function DashboardPage() {
       let ciphertext: Uint8Array;
 
       if (isSandbox) {
-        ciphertext = doc.ciphertext;
+        ciphertext = doc.ciphertext || new Uint8Array();
       } else {
         ciphertext = await apiDownloadDocument(currentUser.sessionToken, doc.id);
       }
@@ -319,7 +326,7 @@ export default function DashboardPage() {
       const decryptedBytes = await decryptFile(ciphertext, doc.encrypted_dek, currentKey);
 
       // Trigger standard browser download
-      const blob = new Blob([decryptedBytes as any], { type: "application/octet-stream" });
+      const blob = new Blob([decryptedBytes as unknown as BlobPart], { type: "application/octet-stream" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -328,13 +335,14 @@ export default function DashboardPage() {
       link.click();
       link.parentNode?.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      toast.error(`Decryption failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errorObject = err as Error;
+      toast.error(`Decryption failed: ${errorObject?.message || "Unknown error"}`);
     }
   };
 
   // Handle preview in browser
-  const handlePreview = async (doc: any) => {
+  const handlePreview = async (doc: SandboxDocument) => {
     if (!user || !privateKey) return;
     const currentUser = user;
     const currentKey = privateKey;
@@ -345,15 +353,16 @@ export default function DashboardPage() {
     try {
       let ciphertext: Uint8Array;
       if (isSandbox) {
-        ciphertext = doc.ciphertext;
+        ciphertext = doc.ciphertext || new Uint8Array();
       } else {
         ciphertext = await apiDownloadDocument(currentUser.sessionToken, doc.id);
       }
       
       const decryptedBytes = await decryptFile(ciphertext, doc.encrypted_dek, currentKey);
-      setPreviewBytes(decryptedBytes as Uint8Array);
-    } catch (err: any) {
-      toast.error(`Preview failed: ${err.message}`);
+      setPreviewBytes(decryptedBytes);
+    } catch (err: unknown) {
+      const errorObject = err as Error;
+      toast.error(`Preview failed: ${errorObject?.message || "Unknown error"}`);
       setPreviewDoc(null);
     }
   };
@@ -378,8 +387,9 @@ export default function DashboardPage() {
                setDocuments(docs);
                toast.success("Document deleted securely");
              }
-           } catch (err: any) {
-             toast.error(`Delete failed: ${err.message}`);
+           } catch (err: unknown) {
+             const errorObject = err as Error;
+             toast.error(`Delete failed: ${errorObject?.message || "Unknown error"}`);
            }
          }
        },

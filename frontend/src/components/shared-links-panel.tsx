@@ -29,23 +29,25 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const loadShares = async () => {
+  const loadShares = React.useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
       const data = await apiListMyShareLinks(user.sessionToken);
       setShares(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load shared links:", err);
       toast.error("Failed to load shared links.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    loadShares();
-  }, [user]);
+    setTimeout(() => {
+      loadShares();
+    }, 0);
+  }, [loadShares]);
 
   const handleCopyLink = (shareId: string) => {
     const origin = window.location.origin;
@@ -64,8 +66,9 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
       await apiRevokeShareLink(user.sessionToken, shareId);
       toast.success("Share link revoked successfully.");
       loadShares();
-    } catch (err: any) {
-      toast.error(`Failed to revoke: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to revoke: ${errorMsg}`);
     }
   };
 

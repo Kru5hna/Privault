@@ -12,6 +12,8 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
   const [fileType, setFileType] = useState<string>("unknown");
 
   useEffect(() => {
+    let active = true;
+    let url = "";
     if (isOpen && fileBytes) {
       // Determine roughly what kind of file it is to preview
       const ext = fileName.split(".").pop()?.toLowerCase() || "";
@@ -30,19 +32,30 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
         type = "text";
       }
 
-      setFileType(type);
-      
-      const blob = new Blob([fileBytes as any], { type: mimeType });
-      const url = window.URL.createObjectURL(blob);
-      setObjectUrl(url);
+      const blob = new Blob([fileBytes as unknown as BlobPart], { type: mimeType });
+      url = window.URL.createObjectURL(blob);
 
-      return () => {
-        window.URL.revokeObjectURL(url);
-      };
+      setTimeout(() => {
+        if (active) {
+          setFileType(type);
+          setObjectUrl(url);
+        }
+      }, 0);
     } else {
-      setObjectUrl(null);
-      setFileType("unknown");
+      setTimeout(() => {
+        if (active) {
+          setObjectUrl(null);
+          setFileType("unknown");
+        }
+      }, 0);
     }
+
+    return () => {
+      active = false;
+      if (url) {
+        window.URL.revokeObjectURL(url);
+      }
+    };
   }, [isOpen, fileBytes, fileName]);
 
   // Read text files as string for rendering
@@ -50,7 +63,10 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
   useEffect(() => {
     if (fileType === "text" && fileBytes) {
       const decoder = new TextDecoder();
-      setTextContent(decoder.decode(fileBytes));
+      const decoded = decoder.decode(fileBytes);
+      setTimeout(() => {
+        setTextContent(decoded);
+      }, 0);
     }
   }, [fileType, fileBytes]);
 
@@ -86,6 +102,7 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
              ) : (
                 <div className="relative z-10 w-full h-full flex items-center justify-center">
                   {fileType === "image" && objectUrl && (
+                     /* eslint-disable-next-line @next/next/no-img-element */
                      <img src={objectUrl} alt={fileName} className="max-w-full max-h-full object-contain" />
                   )}
 

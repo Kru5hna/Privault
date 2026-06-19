@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   apiGetShareLink,
   apiDownloadSharedDocument,
@@ -30,6 +31,68 @@ type PageStatus =
   | "complete"
   | "error";
 
+// ── Static Helper Functions (Moved outside component to satisfy rules and optimize) ──
+const getFileExtension = (filename: string): string => {
+  const parts = filename.split(".");
+  return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
+};
+
+const getFileIcon = (filename: string) => {
+  const ext = getFileExtension(filename);
+  const imageExts = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+  if (imageExts.includes(ext)) return <ImageIcon size={32} />;
+  return <FileText size={32} />;
+};
+
+const getMimeType = (filename: string): string => {
+  const ext = getFileExtension(filename);
+  const mimeMap: Record<string, string> = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    bmp: "image/bmp",
+    txt: "text/plain",
+    md: "text/markdown",
+    json: "application/json",
+    csv: "text/csv",
+    html: "text/html",
+    xml: "text/xml",
+  };
+  return mimeMap[ext] || "application/octet-stream";
+};
+
+const isPreviewable = (filename: string): boolean => {
+  const ext = getFileExtension(filename);
+  const previewableExts = [
+    "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp",
+    "pdf", "txt", "md", "json", "csv",
+  ];
+  return previewableExts.includes(ext);
+};
+
+const formatSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+};
+
+const formatExpiry = (expiresAt: string | null): string => {
+  if (!expiresAt) return "Never";
+  const d = new Date(expiresAt);
+  const now = new Date();
+  const diff = d.getTime() - now.getTime();
+  if (diff <= 0) return "Expired";
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 24) return `${Math.floor(hours / 24)}d ${hours % 24}h remaining`;
+  if (hours > 0) return `${hours}h ${minutes}m remaining`;
+  return `${minutes}m remaining`;
+};
+
 export default function ShareLandingPage() {
   const params = useParams();
   const shareId = params.id as string;
@@ -37,17 +100,20 @@ export default function ShareLandingPage() {
   const [status, setStatus] = useState<PageStatus>("loading");
   const [error, setError] = useState<string>("");
   const [shareMeta, setShareMeta] = useState<ShareLinkMetadata | null>(null);
-  const [linkKey, setLinkKey] = useState<string>("");
+  const [linkKey, setLinkKey] = useState<string>(""); // Avoid empty space issues
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<string>("");
 
-  // Extract the Link Key from the hash fragment on mount
+  // Extract the Link Key from the hash fragment on mount safely
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.length > 1) {
-      setLinkKey(hash.substring(1)); // Remove the '#'
+      const extracted = hash.substring(1);
+      setTimeout(() => {
+        setLinkKey(extracted);
+      }, 0);
     }
-  }, []);
+  }, [setLinkKey]);
 
   // Fetch share metadata once we have the shareId
   useEffect(() => {
@@ -58,8 +124,9 @@ export default function ShareLandingPage() {
         const meta = await apiGetShareLink(shareId);
         setShareMeta(meta);
         setStatus("ready");
-      } catch (err: any) {
-        const msg = err.message || "Failed to load share link.";
+      } catch (err: unknown) {
+        const errorObject = err as Error;
+        const msg = errorObject?.message || "Failed to load share link.";
         if (msg.includes("expired")) {
           setError("This share link has expired.");
         } else if (msg.includes("limit")) {
@@ -75,67 +142,6 @@ export default function ShareLandingPage() {
 
     loadShareMeta();
   }, [shareId]);
-
-  const getFileExtension = (filename: string): string => {
-    const parts = filename.split(".");
-    return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
-  };
-
-  const getFileIcon = (filename: string) => {
-    const ext = getFileExtension(filename);
-    const imageExts = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
-    if (imageExts.includes(ext)) return <ImageIcon size={32} />;
-    return <FileText size={32} />;
-  };
-
-  const getMimeType = (filename: string): string => {
-    const ext = getFileExtension(filename);
-    const mimeMap: Record<string, string> = {
-      pdf: "application/pdf",
-      png: "image/png",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      gif: "image/gif",
-      webp: "image/webp",
-      svg: "image/svg+xml",
-      bmp: "image/bmp",
-      txt: "text/plain",
-      md: "text/markdown",
-      json: "application/json",
-      csv: "text/csv",
-      html: "text/html",
-      xml: "text/xml",
-    };
-    return mimeMap[ext] || "application/octet-stream";
-  };
-
-  const isPreviewable = (filename: string): boolean => {
-    const ext = getFileExtension(filename);
-    const previewableExts = [
-      "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp",
-      "pdf", "txt", "md", "json", "csv",
-    ];
-    return previewableExts.includes(ext);
-  };
-
-  const formatSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  };
-
-  const formatExpiry = (expiresAt: string | null): string => {
-    if (!expiresAt) return "Never";
-    const d = new Date(expiresAt);
-    const now = new Date();
-    const diff = d.getTime() - now.getTime();
-    if (diff <= 0) return "Expired";
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (hours > 24) return `${Math.floor(hours / 24)}d ${hours % 24}h remaining`;
-    if (hours > 0) return `${hours}h ${minutes}m remaining`;
-    return `${minutes}m remaining`;
-  };
 
   const handleDecryptAndDownload = useCallback(async () => {
     if (!shareMeta || !linkKey) {
@@ -169,23 +175,24 @@ export default function ShareLandingPage() {
 
       // 4. Trigger browser download
       const mimeType = getMimeType(shareMeta.document_name);
-      const blob = new Blob([decryptedBytes], { type: mimeType });
+      const blob = new Blob([decryptedBytes as unknown as BlobPart], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", shareMeta.document_name);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode?.removeChild(link);
+      const linkElement = document.createElement("a");
+      linkElement.href = url;
+      linkElement.setAttribute("download", shareMeta.document_name);
+      document.body.appendChild(linkElement);
+      linkElement.click();
+      linkElement.parentNode?.removeChild(linkElement);
       window.URL.revokeObjectURL(url);
 
       setStatus("complete");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Decryption failed:", err);
-      if (err.message?.includes("decrypt")) {
+      const errorObject = err as Error;
+      if (errorObject?.message?.includes("decrypt")) {
         setError("Decryption failed. The link key may be invalid or corrupted.");
       } else {
-        setError(err.message || "Failed to decrypt and download the file.");
+        setError(errorObject?.message || "Failed to decrypt and download the file.");
       }
       setStatus("error");
     }
@@ -214,15 +221,16 @@ export default function ShareLandingPage() {
 
       const decryptedBytes = new Uint8Array(decryptedBuffer);
       const mimeType = getMimeType(shareMeta.document_name);
-      const blob = new Blob([decryptedBytes], { type: mimeType });
+      const blob = new Blob([decryptedBytes as unknown as BlobPart], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
 
       setPreviewUrl(url);
       setPreviewType(mimeType);
       setStatus("previewing");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Preview failed:", err);
-      setError(err.message || "Failed to preview the file.");
+      const errorObject = err as Error;
+      setError(errorObject?.message || "Failed to preview the file.");
       setStatus("error");
     }
   }, [shareMeta, linkKey, shareId]);
@@ -243,12 +251,12 @@ export default function ShareLandingPage() {
             <p className="text-sm text-[#8E929F] leading-relaxed mb-6">
               {error}
             </p>
-            <a
+            <Link
               href="/"
               className="inline-block text-xs font-bold uppercase tracking-widest text-[#E41613] hover:text-white border border-[#E41613]/30 hover:border-[#E41613] px-6 py-2.5 transition-colors"
             >
               Go to Privault
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -369,6 +377,7 @@ export default function ShareLandingPage() {
         {/* Preview Content */}
         <main className="relative z-10 flex-1 flex items-center justify-center p-6">
           {previewType.startsWith("image/") ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={previewUrl}
               alt={shareMeta?.document_name}
@@ -504,12 +513,12 @@ export default function ShareLandingPage() {
 
         {/* Footer */}
         <div className="text-center mt-6">
-          <a
+          <Link
             href="/"
             className="text-xs text-[#5E626F] hover:text-[#E41613] transition-colors tracking-wider"
           >
             Powered by PRIVAULT — Zero-Knowledge E2EE File Storage
-          </a>
+          </Link>
         </div>
       </div>
     </div>

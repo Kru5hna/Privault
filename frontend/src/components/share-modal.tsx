@@ -13,7 +13,6 @@ import {
   Copy, 
   Check, 
   Calendar, 
-  Download, 
   Trash2, 
   Link, 
   Loader2 
@@ -45,27 +44,29 @@ export function ShareModal({
   const [loadingShares, setLoadingShares] = useState<boolean>(false);
 
   // Load existing share links for this document
-  const loadExistingShares = async () => {
+  const loadExistingShares = React.useCallback(async () => {
     if (!user || !doc) return;
     setLoadingShares(true);
     try {
       const shares = await apiListMyShareLinks(user.sessionToken);
       const docShares = shares.filter(s => s.document_id === doc.id);
       setActiveShares(docShares);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load share links", err);
     } finally {
       setLoadingShares(false);
     }
-  };
+  }, [user, doc]);
 
   useEffect(() => {
     if (isOpen && doc && user) {
-      setGeneratedLink("");
-      setCopied(false);
-      loadExistingShares();
+      setTimeout(() => {
+        setGeneratedLink("");
+        setCopied(false);
+        loadExistingShares();
+      }, 0);
     }
-  }, [isOpen, doc]);
+  }, [isOpen, doc, user, loadExistingShares]);
 
   if (!isOpen || !doc || !user) return null;
 
@@ -120,8 +121,9 @@ export function ShareModal({
       
       // Reload list
       loadExistingShares();
-    } catch (err: any) {
-      toast.error(`Link generation failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      toast.error(`Link generation failed: ${errorMsg}`);
     } finally {
       setGenerating(false);
     }
@@ -143,8 +145,9 @@ export function ShareModal({
       if (generatedLink.includes(shareId)) {
         setGeneratedLink("");
       }
-    } catch (err: any) {
-      toast.error(`Revoke failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      toast.error(`Revoke failed: ${errorMsg}`);
     }
   };
 

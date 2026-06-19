@@ -20,7 +20,9 @@ export function ScrambledText({ text, delay = 20 }: ScrambledTextProps) {
         .split("")
         .map(() => chars[Math.floor(Math.random() * chars.length)])
         .join("");
-      setDisplayText(initialScrambled);
+      setTimeout(() => {
+        setDisplayText(initialScrambled);
+      }, 0);
     }
   }, [text, hasIntersected]);
 

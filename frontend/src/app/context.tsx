@@ -93,6 +93,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     restoreSession();
   }, []);
 
+  // ── Login ────────────────────────────────────────────────────────────────
+  const loginInternal = useCallback(async (username: string, password: string) => {
+    // 1. Fetch the user's salts (public endpoint)
+    const salts = await apiGetSalts(username);
+
+    // 2. Derive auth verifier from password + auth_salt
+    const authVerifier = await deriveAuthVerifier(password, salts.auth_salt);
+
+    // 3. Authenticate
+    const response = await apiLogin(username, authVerifier);
+
+    // 4. Derive KEK from password + kek_salt
+    const KEK = await deriveKEK(password, response.kek_salt);
+
+    // 5. Unwrap private key
+    const decryptedPrivateKey = await unwrapPrivateKey(
+      response.wrapped_private_key,
+      response.wrapped_private_key_iv,
+      KEK
+    );
+
+    // 6. Build session object (no key material stored!)
+    const session: UserSession = {
+      sessionToken: response.session_token,
+      userId: response.user_id,
+      username: response.username,
+      publicKey: response.public_key,
+      kekSalt: response.kek_salt,
+      wrappedPrivateKey: response.wrapped_private_key,
+      wrappedPrivateKeyIv: response.wrapped_private_key_iv,
+    };
+
+    // 7. Persist session token for session restore
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+
+    // 8. Update state — fully unlocked
+    setUser(session);
+    setPrivateKey(decryptedPrivateKey);
+    setStatus("unlocked");
+    router.push("/dashboard");
+  }, [router]);
+
   // ── Register ─────────────────────────────────────────────────────────────
   const register = useCallback(async (username: string, password: string) => {
     setStatus("loading");
@@ -132,49 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStatus("unauthenticated");
       throw err;
     }
-  }, []);
-
-  // ── Login ────────────────────────────────────────────────────────────────
-  const loginInternal = async (username: string, password: string) => {
-    // 1. Fetch the user's salts (public endpoint)
-    const salts = await apiGetSalts(username);
-
-    // 2. Derive auth verifier from password + auth_salt
-    const authVerifier = await deriveAuthVerifier(password, salts.auth_salt);
-
-    // 3. Authenticate
-    const response = await apiLogin(username, authVerifier);
-
-    // 4. Derive KEK from password + kek_salt
-    const KEK = await deriveKEK(password, response.kek_salt);
-
-    // 5. Unwrap private key
-    const decryptedPrivateKey = await unwrapPrivateKey(
-      response.wrapped_private_key,
-      response.wrapped_private_key_iv,
-      KEK
-    );
-
-    // 6. Build session object (no key material stored!)
-    const session: UserSession = {
-      sessionToken: response.session_token,
-      userId: response.user_id,
-      username: response.username,
-      publicKey: response.public_key,
-      kekSalt: response.kek_salt,
-      wrappedPrivateKey: response.wrapped_private_key,
-      wrappedPrivateKeyIv: response.wrapped_private_key_iv,
-    };
-
-    // 7. Persist session token for session restore
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-
-    // 8. Update state — fully unlocked
-    setUser(session);
-    setPrivateKey(decryptedPrivateKey);
-    setStatus("unlocked");
-    router.push("/dashboard");
-  };
+  }, [loginInternal]);
 
   const login = useCallback(async (username: string, password: string) => {
     setStatus("loading");
@@ -187,7 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStatus("unauthenticated");
       throw err;
     }
-  }, []);
+  }, [loginInternal]);
 
   // ── Unlock ───────────────────────────────────────────────────────────────
   // Called when in "locked" state — user enters master password to unlock.

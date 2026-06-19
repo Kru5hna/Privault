@@ -10,11 +10,9 @@ import {
   Plus, 
   Share2, 
   HardDrive, 
-  Menu, 
   X,
   FolderOpen
 } from "lucide-react";
-import { Button } from "./ui/button";
 
 interface TreeNode {
   folder: FolderMetadata;
@@ -105,10 +103,6 @@ export function FolderSidebar({
     }
   };
 
-  const handleToggleExpand = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
 
   const handleCreateFolderSubmit = async (e: React.FormEvent, parentId: string | null) => {
     e.preventDefault();
