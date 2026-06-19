@@ -53,7 +53,7 @@ export default function DashboardPage() {
   const [demoDocs, setDemoDocs] = useState<any[]>([]);
   const [isSandbox, setIsSandbox] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const [uploadState, setUploadState] = useState<"idle" | "encrypting" | "uploading" | "complete">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
@@ -142,7 +142,7 @@ export default function DashboardPage() {
     const currentUser = user;
     const currentKey = privateKey;
     setUploadError(null);
-    setUploading(true);
+    setUploadState("encrypting");
     try {
       // 1. Read file bytes
       const fileBytes = new Uint8Array(await file.arrayBuffer());
@@ -152,6 +152,8 @@ export default function DashboardPage() {
 
       // 3. Encrypt file using Web Crypto
       const { ciphertext, encryptedDek } = await encryptFile(fileBytes, rsaPublicKey);
+
+      setUploadState("uploading");
 
       if (isSandbox) {
         // Mock save to sandbox state
@@ -174,11 +176,16 @@ export default function DashboardPage() {
         const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
         setDocuments(docs);
       }
+      
+      setUploadState("complete");
+      setTimeout(() => {
+         setUploadState("idle");
+      }, 2000);
+      
     } catch (err: any) {
       console.error(err);
       setUploadError(err.message || "Failed to encrypt or upload file.");
-    } finally {
-      setUploading(false);
+      setUploadState("idle");
     }
   };
 
@@ -429,32 +436,46 @@ export default function DashboardPage() {
             onChange={onFileChange}
             className="hidden"
           />
-          {uploading ? (
+          
+          {uploadState === "encrypting" && (
             <div className="flex flex-col items-center justify-center gap-3 text-center">
-              <svg
-                className="h-6 w-6 animate-spin text-[#E41613]"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
+              <svg className="h-6 w-6 animate-pulse text-[#E41613]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
               <span className="text-micro font-bold tracking-[0.2em] text-[#E41613]">
-                ENCRYPTING & UPLOADING FILE...
+                ENCRYPTING LOCALLY...
               </span>
             </div>
-          ) : (
+          )}
+
+          {uploadState === "uploading" && (
+             <div className="flex flex-col items-center justify-center gap-3 text-center">
+               <svg
+                 className="h-6 w-6 animate-spin text-[#E41613]"
+                 fill="none"
+                 viewBox="0 0 24 24"
+               >
+                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+               </svg>
+               <span className="text-micro font-bold tracking-[0.2em] text-[#E41613]">
+                 UPLOADING CIPHERTEXT...
+               </span>
+             </div>
+          )}
+
+          {uploadState === "complete" && (
+             <div className="flex flex-col items-center justify-center gap-3 text-center text-green-500">
+               <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+               </svg>
+               <span className="text-micro font-bold tracking-[0.2em]">
+                 SEALED & VERIFIED
+               </span>
+             </div>
+          )}
+
+          {uploadState === "idle" && (
             <div className="text-center p-6">
               <p className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60 group-hover:text-white transition-colors duration-300">
                 Drag files here or click to browse
