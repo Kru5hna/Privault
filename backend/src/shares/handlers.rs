@@ -15,6 +15,7 @@ pub struct CreateShareLinkPayload {
     pub encrypted_dek: String,
     pub expires_at: Option<DateTime<Utc>>,
     pub download_limit: Option<i32>,
+    pub owner_encrypted_link_key: Option<String>,
 }
 
 /// Create a new cryptographic share link for a document
@@ -44,15 +45,16 @@ pub async fn create_share_link(
     let share_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO share_links (id, document_id, owner_id, encrypted_dek, expires_at, download_limit)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO share_links (id, document_id, owner_id, encrypted_dek, expires_at, download_limit, owner_encrypted_link_key)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,
         share_id,
         payload.document_id,
         session.user_id,
         payload.encrypted_dek,
         payload.expires_at,
-        payload.download_limit
+        payload.download_limit,
+        payload.owner_encrypted_link_key
     )
     .execute(&state.db)
     .await
@@ -71,6 +73,7 @@ pub async fn create_share_link(
         download_limit: payload.download_limit,
         downloads_count: 0,
         created_at: Some(Utc::now()),
+        owner_encrypted_link_key: payload.owner_encrypted_link_key,
     }))
 }
 
@@ -81,7 +84,7 @@ pub async fn get_share_link(
 ) -> Result<Json<ShareLinkResponse>, AppError> {
     let row = sqlx::query!(
         r#"
-        SELECT s.id, s.document_id, s.encrypted_dek, s.expires_at, s.download_limit, s.downloads_count, s.created_at,
+        SELECT s.id, s.document_id, s.encrypted_dek, s.expires_at, s.download_limit, s.downloads_count, s.created_at, s.owner_encrypted_link_key,
                d.name AS document_name, d.size AS document_size
         FROM share_links s
         JOIN documents d ON s.document_id = d.id
@@ -126,6 +129,7 @@ pub async fn get_share_link(
         download_limit: row.download_limit,
         downloads_count,
         created_at: row.created_at,
+        owner_encrypted_link_key: row.owner_encrypted_link_key,
     }))
 }
 
@@ -228,7 +232,7 @@ pub async fn list_my_share_links(
 ) -> Result<Json<Vec<ShareLinkResponse>>, AppError> {
     let rows = sqlx::query!(
         r#"
-        SELECT s.id, s.document_id, s.encrypted_dek, s.expires_at, s.download_limit, s.downloads_count, s.created_at,
+        SELECT s.id, s.document_id, s.encrypted_dek, s.expires_at, s.download_limit, s.downloads_count, s.created_at, s.owner_encrypted_link_key,
                d.name AS document_name, d.size AS document_size
         FROM share_links s
         JOIN documents d ON s.document_id = d.id
@@ -254,6 +258,7 @@ pub async fn list_my_share_links(
         downloads_count: r.downloads_count.unwrap_or(0),
         download_limit: r.download_limit,
         created_at: r.created_at,
+        owner_encrypted_link_key: r.owner_encrypted_link_key,
     }).collect();
 
     Ok(Json(shares))

@@ -12,6 +12,7 @@ pub struct ShareLink {
     pub download_limit: Option<i32>,
     pub downloads_count: i32,
     pub created_at: Option<DateTime<Utc>>,
+    pub owner_encrypted_link_key: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,4 +26,5 @@ pub struct ShareLinkResponse {
     pub download_limit: Option<i32>,
     pub downloads_count: i32,
     pub created_at: Option<DateTime<Utc>>,
+    pub owner_encrypted_link_key: Option<String>,
 }
