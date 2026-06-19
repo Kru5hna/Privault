@@ -23,6 +23,7 @@ import { encryptFile, decryptFile, getPublicKeyFromPrivateKey } from "@/lib/cryp
 import { ScrambledText } from "@/components/scrambled-text";
 import { FileDetailsPanel } from "@/components/file-details-panel";
 import { TagBadge } from "@/components/tag-badge";
+import { FilePreviewModal } from "@/components/file-preview-modal";
 
 // Fallback seed documents for sandbox demo
 const DEMO_DOCUMENTS = [
@@ -60,6 +61,9 @@ export default function DashboardPage() {
   const [allTags, setAllTags] = useState<TagMetadata[]>([]);
   const [docTagsCache, setDocTagsCache] = useState<Record<string, TagMetadata[]>>({});
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+
+  const [previewDoc, setPreviewDoc] = useState<{name: string} | null>(null);
+  const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
 
   const [demoDocs, setDemoDocs] = useState<any[]>([]);
   const [isSandbox, setIsSandbox] = useState(false);
@@ -323,6 +327,31 @@ export default function DashboardPage() {
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
       alert(`Decryption failed: ${err.message}`);
+    }
+  };
+
+  // Handle preview in browser
+  const handlePreview = async (doc: any) => {
+    if (!user || !privateKey) return;
+    const currentUser = user;
+    const currentKey = privateKey;
+    
+    setPreviewDoc({ name: doc.name });
+    setPreviewBytes(null); // Will show loading spinner in modal
+    
+    try {
+      let ciphertext: Uint8Array;
+      if (isSandbox) {
+        ciphertext = doc.ciphertext;
+      } else {
+        ciphertext = await apiDownloadDocument(currentUser.sessionToken, doc.id);
+      }
+      
+      const decryptedBytes = await decryptFile(ciphertext, doc.encrypted_dek, currentKey);
+      setPreviewBytes(decryptedBytes as Uint8Array);
+    } catch (err: any) {
+      alert(`Preview failed: ${err.message}`);
+      setPreviewDoc(null);
     }
   };
 
@@ -699,15 +728,30 @@ export default function DashboardPage() {
                         {formatDate(doc.created_at)}
                       </td>
                       <td data-label="Actions" className="py-4 text-right">
-                        <div className="flex flex-wrap justify-start gap-8 sm:justify-end items-center">
+                        <div className="flex flex-wrap justify-start gap-4 sm:justify-end items-center">
                           <button
-                            onClick={() => handleDownload(doc)}
-                            className="text-xs font-bold uppercase tracking-widest text-[#F5F5F0]/70 hover:text-white hover:underline underline-offset-4 decoration-[#E41613] decoration-2 transition-all cursor-pointer"
+                            onClick={(e) => {
+                               e.stopPropagation();
+                               handlePreview(doc);
+                            }}
+                            className="text-xs font-bold uppercase tracking-widest text-[#F5F5F0]/70 hover:text-white hover:underline underline-offset-4 decoration-white decoration-2 transition-all cursor-pointer"
                           >
-                            Download & Decrypt
+                            Preview
                           </button>
                           <button
-                            onClick={() => handleDelete(doc.id)}
+                            onClick={(e) => {
+                               e.stopPropagation();
+                               handleDownload(doc);
+                            }}
+                            className="text-xs font-bold uppercase tracking-widest text-[#F5F5F0]/70 hover:text-white hover:underline underline-offset-4 decoration-[#E41613] decoration-2 transition-all cursor-pointer"
+                          >
+                            Download
+                          </button>
+                          <button
+                            onClick={(e) => {
+                               e.stopPropagation();
+                               handleDelete(doc.id);
+                            }}
                             className="btn-delete-tactical relative cursor-pointer"
                           >
                             <span className="btn-bg" />
@@ -740,6 +784,17 @@ export default function DashboardPage() {
         onTagAdded={(docId, newTags) => {
            setDocTagsCache(prev => ({...prev, [docId]: newTags}));
         }}
+      />
+      
+      {/* File Preview Modal */}
+      <FilePreviewModal 
+         isOpen={previewDoc !== null}
+         onClose={() => {
+            setPreviewDoc(null);
+            setPreviewBytes(null);
+         }}
+         fileName={previewDoc?.name || ""}
+         fileBytes={previewBytes}
       />
     </div>
   );
