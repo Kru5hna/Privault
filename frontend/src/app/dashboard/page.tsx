@@ -7,7 +7,11 @@ import {
   apiUploadDocument,
   apiDownloadDocument,
   apiDeleteDocument,
+  apiCreateFolder,
+  apiListFolders,
+  apiDeleteFolder,
   DocumentMetadata,
+  FolderMetadata,
 } from "@/lib/api";
 import { encryptFile, decryptFile, getPublicKeyFromPrivateKey } from "@/lib/crypto";
 import { ScrambledText } from "@/components/scrambled-text";
@@ -38,6 +42,12 @@ export default function DashboardPage() {
   const { user, privateKey, status, logout } = useAuth();
   const authLoading = status === "loading";
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
+  const [folders, setFolders] = useState<FolderMetadata[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [folderPath, setFolderPath] = useState<{id: string | null, name: string}[]>([{id: null, name: "Root"}]);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+
   const [demoDocs, setDemoDocs] = useState<any[]>([]);
   const [isSandbox, setIsSandbox] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(true);
@@ -53,7 +63,7 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, logout]);
 
-  // Load documents
+  // Load documents and folders
   useEffect(() => {
     if (!user || !privateKey) return;
     const currentUser = user;
@@ -62,37 +72,45 @@ export default function DashboardPage() {
     async function loadData() {
       setLoadingDocs(true);
       try {
-        const docs = await apiListDocuments(currentUser.sessionToken);
+        const [docs, fldrs] = await Promise.all([
+          apiListDocuments(currentUser.sessionToken, currentFolderId),
+          apiListFolders(currentUser.sessionToken, currentFolderId)
+        ]);
         setDocuments(docs);
+        setFolders(fldrs);
         setIsSandbox(false);
       } catch (err) {
         console.warn("Backend documents API failed or not yet implemented. Falling back to local memory sandbox.", err);
         setIsSandbox(true);
         // Setup local encrypted demo files in memory using the user's private/public key
-        try {
-          const pubKey = await getPublicKeyFromPrivateKey(currentKey);
-          const encoder = new TextEncoder();
-          const preparedDemos = await Promise.all(
-            DEMO_DOCUMENTS.map(async (doc) => {
-              const { ciphertext, encryptedDek } = await encryptFile(
-                encoder.encode(doc.content),
-                pubKey
+        if (currentFolderId === null) {
+            try {
+              const pubKey = await getPublicKeyFromPrivateKey(currentKey);
+              const encoder = new TextEncoder();
+              const preparedDemos = await Promise.all(
+                DEMO_DOCUMENTS.map(async (doc) => {
+                  const { ciphertext, encryptedDek } = await encryptFile(
+                    encoder.encode(doc.content),
+                    pubKey
+                  );
+                  return {
+                    id: doc.id,
+                    owner_id: doc.owner_id,
+                    name: doc.name,
+                    size: doc.size,
+                    created_at: doc.created_at,
+                    updated_at: doc.updated_at,
+                    encrypted_dek: encryptedDek,
+                    ciphertext, // Cached locally
+                  };
+                })
               );
-              return {
-                id: doc.id,
-                owner_id: doc.owner_id,
-                name: doc.name,
-                size: doc.size,
-                created_at: doc.created_at,
-                updated_at: doc.updated_at,
-                encrypted_dek: encryptedDek,
-                ciphertext, // Cached locally
-              };
-            })
-          );
-          setDemoDocs(preparedDemos);
-        } catch (cryptoErr) {
-          console.error("Failed to prepare memory sandbox keys", cryptoErr);
+              setDemoDocs(preparedDemos);
+            } catch (cryptoErr) {
+              console.error("Failed to prepare memory sandbox keys", cryptoErr);
+            }
+        } else {
+            setDemoDocs([]);
         }
       } finally {
         setLoadingDocs(false);
@@ -100,7 +118,7 @@ export default function DashboardPage() {
     }
 
     loadData();
-  }, [user, privateKey]);
+  }, [user, privateKey, currentFolderId]);
 
   if (authLoading || !user || !privateKey) {
     return (
@@ -149,9 +167,9 @@ export default function DashboardPage() {
       } else {
         // Send encrypted payload to backend
         const blob = new Blob([ciphertext as any], { type: "application/octet-stream" });
-        await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek);
+        await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek, currentFolderId);
         // Refresh documents from server
-        const docs = await apiListDocuments(currentUser.sessionToken);
+        const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
         setDocuments(docs);
       }
     } catch (err: any) {
@@ -160,6 +178,54 @@ export default function DashboardPage() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleCreateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newFolderName.trim()) return;
+    try {
+      if (isSandbox) {
+         alert("Folders are not supported in sandbox mode.");
+         setIsCreatingFolder(false);
+         setNewFolderName("");
+         return;
+      }
+      await apiCreateFolder(user.sessionToken, newFolderName.trim(), currentFolderId);
+      const fldrs = await apiListFolders(user.sessionToken, currentFolderId);
+      setFolders(fldrs);
+      setIsCreatingFolder(false);
+      setNewFolderName("");
+    } catch (err: any) {
+      alert(`Failed to create folder: ${err.message}`);
+    }
+  };
+
+  const handleNavigateToFolder = (folderId: string | null, folderName: string) => {
+    setCurrentFolderId(folderId);
+    if (folderId === null) {
+      setFolderPath([{id: null, name: "Root"}]);
+    } else {
+      // If we are clicking a breadcrumb, we truncate the path
+      const existingIdx = folderPath.findIndex(f => f.id === folderId);
+      if (existingIdx >= 0) {
+        setFolderPath(folderPath.slice(0, existingIdx + 1));
+      } else {
+        setFolderPath([...folderPath, {id: folderId, name: folderName}]);
+      }
+    }
+    setSearchQuery("");
+  };
+
+  const handleDeleteFolder = async (folderId: string, folderName: string) => {
+     if (!user) return;
+     if (!confirm(`Are you sure you want to delete the folder "${folderName}" and ALL its contents? This cannot be undone.`)) return;
+     try {
+       await apiDeleteFolder(user.sessionToken, folderId);
+       const fldrs = await apiListFolders(user.sessionToken, currentFolderId);
+       setFolders(fldrs);
+     } catch (err: any) {
+       alert(`Delete folder failed: ${err.message}`);
+     }
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,7 +301,7 @@ export default function DashboardPage() {
       } else {
         await apiDeleteDocument(currentUser.sessionToken, id);
         // Refresh docs
-        const docs = await apiListDocuments(currentUser.sessionToken);
+        const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
         setDocuments(docs);
       }
     } catch (err: any) {
@@ -314,9 +380,21 @@ export default function DashboardPage() {
             <h1 className="font-serif text-2xl font-light tracking-wide text-white sm:text-3xl">
               Document Vault
             </h1>
-            <p className="mt-2 text-xs text-white/40 tracking-wider">
-              ZERO-KNOWLEDGE E2EE STORAGE. DECRYPTION KEYS EXIST ONLY IN YOUR BROWSER.
-            </p>
+            
+            {/* Breadcrumb Navigation */}
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm font-medium tracking-wider text-white/50">
+              {folderPath.map((crumb, idx) => (
+                <React.Fragment key={crumb.id || "root"}>
+                  {idx > 0 && <span className="text-white/20">/</span>}
+                  <button
+                    onClick={() => handleNavigateToFolder(crumb.id, crumb.name)}
+                    className={`hover:text-white transition-colors cursor-pointer ${idx === folderPath.length - 1 ? "text-white" : ""}`}
+                  >
+                    {crumb.name}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
           </div>
 
           {/* Sandbox Indicator */}
@@ -393,21 +471,59 @@ export default function DashboardPage() {
 
         {/* Filter & Table Area */}
         <section className="panel-card p-4 sm:p-8">
-          {/* Search bar */}
-          <div className="mb-6 relative">
-            <input
-              type="text"
-              placeholder="Filter documents by name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full input-tactical py-2.5 text-xs font-semibold tracking-wider pl-10 focus-crimson"
-            />
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+          {/* Search bar and Action bar */}
+          <div className="mb-6 flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Filter documents by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full input-tactical py-2.5 text-xs font-semibold tracking-wider pl-10 focus-crimson"
+              />
+              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+            
+            <div className="flex shrink-0">
+               {!isSandbox && !isCreatingFolder && (
+                 <button 
+                   onClick={() => setIsCreatingFolder(true)}
+                   className="btn-outline px-4 cursor-pointer"
+                 >
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
+                   New Folder
+                 </button>
+               )}
             </div>
           </div>
+
+          {/* New Folder Inline Form */}
+          {isCreatingFolder && (
+            <div className="mb-6 p-4 border border-[#E41613]/30 bg-[#E41613]/5 flex flex-col sm:flex-row gap-4 items-center">
+               <svg className="w-5 h-5 text-[#E41613] hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+               <form onSubmit={handleCreateFolder} className="flex flex-1 w-full gap-4">
+                 <input 
+                   autoFocus
+                   type="text" 
+                   value={newFolderName}
+                   onChange={e => setNewFolderName(e.target.value)}
+                   placeholder="Folder Name"
+                   className="input-tactical py-2 px-3 text-xs flex-1"
+                 />
+                 <button type="submit" className="btn-primary shrink-0">
+                    <span className="btn-bg"></span>
+                    <span className="btn-text">Create</span>
+                 </button>
+                 <button type="button" onClick={() => setIsCreatingFolder(false)} className="text-xs uppercase font-bold text-white/50 hover:text-white cursor-pointer px-2 shrink-0 tracking-widest">
+                   Cancel
+                 </button>
+               </form>
+            </div>
+          )}
 
           {/* Documents Table */}
           {loadingDocs ? (
@@ -430,6 +546,42 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
+                  {/* Render Folders First */}
+                  {!searchQuery && folders.map((folder) => (
+                    <tr key={folder.id} className="group border-b border-white/[0.02] last:border-b-0 hover:bg-white/[0.01] transition-colors sm:table-row">
+                      <td data-label="Name" className="py-4 pr-4 text-sm text-white/95">
+                        <div 
+                           className="flex items-center gap-3 cursor-pointer group-hover:text-[#E41613] transition-colors"
+                           onClick={() => handleNavigateToFolder(folder.id, folder.name)}
+                        >
+                          <svg className="h-4 w-4 text-white/40 group-hover:text-[#E41613] shrink-0 transition-colors" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                          </svg>
+                          <span className="min-w-0 break-all sm:truncate sm:max-w-md font-bold">
+                            {folder.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td data-label="Size" className="py-4 pr-4 text-xs text-white/40 font-mono">
+                        --
+                      </td>
+                      <td data-label="Seal Date" className="py-4 pr-4 text-xs text-white/40">
+                        {formatDate(folder.created_at)}
+                      </td>
+                      <td data-label="Actions" className="py-4 text-right">
+                        <div className="flex flex-wrap justify-start gap-8 sm:justify-end items-center">
+                           <button
+                            onClick={() => handleDeleteFolder(folder.id, folder.name)}
+                            className="text-xs font-bold uppercase tracking-widest text-[#E41613]/50 hover:text-[#E41613] transition-colors cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Render Files */}
                   {displayedDocs.map((doc) => (
                     <tr key={doc.id} className="group border-b border-white/[0.02] last:border-b-0 hover:bg-white/[0.01] transition-colors sm:table-row">
                       <td data-label="Name" className="py-4 pr-4 text-sm text-white/95">

@@ -28,6 +28,21 @@ export interface DocumentMetadata {
   name: string;
   encrypted_dek: string;
   size: number;
+  folder_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FolderMetadata {
+  id: string;
+  owner_id: string;
+  parent_id: string | null;
+  name: string;
+  created_at: string;
+}  owner_id: string;
+  name: string;
+  encrypted_dek: string;
+  size: number;
   created_at: string;
   updated_at: string;
 }
@@ -156,9 +171,14 @@ export async function apiGetMe(
 
 /** Fetch all documents owned by the current user */
 export async function apiListDocuments(
-  token: string
+  token: string,
+  folderId?: string | null
 ): Promise<DocumentMetadata[]> {
-  const res = await fetch(`${API_BASE_URL}/api/documents`, {
+  const url = folderId 
+    ? `${API_BASE_URL}/api/documents?folder_id=${folderId}`
+    : `${API_BASE_URL}/api/documents`;
+    
+  const res = await fetch(url, {
     method: "GET",
     headers: authHeaders(token),
   });
@@ -170,17 +190,81 @@ export async function apiUploadDocument(
   token: string,
   fileBlob: Blob,
   fileName: string,
-  encryptedDek: string
+  encryptedDek: string,
+  folderId?: string | null
 ): Promise<{ id: string; message: string }> {
   const formData = new FormData();
   formData.append("file", fileBlob, fileName);
   formData.append("name", fileName);
   formData.append("encrypted_dek", encryptedDek);
+  if (folderId) {
+    formData.append("folder_id", folderId);
+  }
 
   const res = await fetch(`${API_BASE_URL}/api/documents`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
+  });
+  return handleResponse(res);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Folder Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Create a new folder */
+export async function apiCreateFolder(
+  token: string,
+  name: string,
+  parentId?: string | null
+): Promise<FolderMetadata> {
+  const res = await fetch(`${API_BASE_URL}/api/folders`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ name, parent_id: parentId || null }),
+  });
+  return handleResponse(res);
+}
+
+/** Fetch all folders, optionally scoped to a parent folder */
+export async function apiListFolders(
+  token: string,
+  parentId?: string | null
+): Promise<FolderMetadata[]> {
+  const url = parentId 
+    ? `${API_BASE_URL}/api/folders?parent_id=${parentId}`
+    : `${API_BASE_URL}/api/folders`;
+    
+  const res = await fetch(url, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+/** Rename a folder */
+export async function apiRenameFolder(
+  token: string,
+  folderId: string,
+  newName: string
+): Promise<FolderMetadata> {
+  const res = await fetch(`${API_BASE_URL}/api/folders/${folderId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({ name: newName }),
+  });
+  return handleResponse(res);
+}
+
+/** Delete a folder */
+export async function apiDeleteFolder(
+  token: string,
+  folderId: string
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/folders/${folderId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
   });
   return handleResponse(res);
 }
