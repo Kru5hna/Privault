@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/app/context";
 import {
+  CHALLENGE_STEPS,
   FAQ_ITEMS,
   LANDING_STATS,
   SECURITY_STRATEGIES,
@@ -15,6 +16,7 @@ import {
   AnimatedCounter,
   FadeUp,
   MagneticButton,
+  RevealText,
 } from "./motion-primitives";
 import { StrategyCard } from "./strategy-card";
 
@@ -23,6 +25,7 @@ export function LandingBody() {
     <>
       <StatsBand />
       <MissionSection />
+      <ChallengeSection />
       <SpecificationsSection />
       <StrategiesSection />
       <FaqSection />
@@ -83,20 +86,21 @@ function MissionSection() {
           <div className="lg:col-span-8">
             <FadeUp delay={0.2}>
               <h2 className="text-display text-[clamp(2rem,4vw,3.5rem)] text-white/90 leading-[1.15]">
-                A secure workspace built on{" "}
+                We built the vault that{" "}
                 <span className="text-[#E41613] italic font-serif font-normal">
-                  absolute privacy.
+                  cannot be opened.
                 </span>{" "}
-                Only you can open what you store. Your documents never touch our
-                servers unencrypted.
+                Not by us. Not by hackers. Not by governments.
               </h2>
             </FadeUp>
             <FadeUp delay={0.35}>
               <p className="mt-8 text-base text-white/40 font-light leading-relaxed max-w-xl">
-                Founded in 2026, Privault was built so even we can&apos;t read
-                your files. When you upload a document, it gets locked directly
-                in your browser. Your private keys are managed locally on your
-                device, ensuring total control and complete peace of mind.
+                Founded in 2026, Privault exists because &quot;trust us&quot; is not a
+                security model. Every file is encrypted with AES-256-GCM in your
+                browser before transmission. Your RSA-2048 private key never
+                reaches our servers. Your password derivations use independent
+                salts so auth and encryption stay separate. No backdoors. No
+                recovery emails. No exceptions.
               </p>
             </FadeUp>
             <FadeUp delay={0.45}>
@@ -112,6 +116,84 @@ function MissionSection() {
             </FadeUp>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function ChallengeSection() {
+  return (
+    <section
+      id="challenge"
+      className="relative py-16 sm:py-28 md:py-40 bg-[#0A0A0A] overflow-hidden border-t border-white/5"
+    >
+      <div className="absolute inset-0 dotted-grid-dark opacity-30" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#E41613]/50 to-transparent" />
+
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="mb-12 sm:mb-20 max-w-3xl">
+          <FadeUp>
+            <p className="text-label text-[#E41613] mb-4">The Challenge</p>
+          </FadeUp>
+          <FadeUp delay={0.1}>
+            <h2 className="font-serif text-3xl md:text-5xl font-light text-white leading-tight">
+              We dare you to{" "}
+              <span className="italic text-[#E41613]">break in.</span>
+            </h2>
+          </FadeUp>
+          <FadeUp delay={0.2}>
+            <p className="mt-6 text-base text-white/40 font-light leading-relaxed max-w-xl">
+              Most security products ask you to trust their word. We&apos;re
+              asking you to try your luck.
+            </p>
+          </FadeUp>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {CHALLENGE_STEPS.map((item, index) => (
+            <FadeUp key={item.step} delay={index * 0.15}>
+              <div
+                className={`relative border ${
+                  item.highlight
+                    ? "border-[#E41613]/40 bg-[#E41613]/[0.03]"
+                    : "border-white/10 bg-white/[0.02]"
+                } p-8 h-full transition-all duration-500 hover:border-[#E41613]/50`}
+              >
+                {item.highlight && (
+                  <div className="absolute top-0 right-0 bg-[#E41613] px-3 py-1">
+                    <span className="text-micro text-white">YOU GET THIS</span>
+                  </div>
+                )}
+                <span className="text-micro text-white/20 mb-6 block">
+                  Step {item.step}
+                </span>
+                <h3 className="font-serif text-xl font-normal text-white mb-4">
+                  {item.title}
+                </h3>
+                <p className="text-sm text-white/35 leading-relaxed font-light">
+                  {item.desc}
+                </p>
+              </div>
+            </FadeUp>
+          ))}
+        </div>
+
+        <FadeUp delay={0.6}>
+          <div className="mt-16 text-center">
+            <p className="text-micro text-white/30 mb-6">
+              Still not convinced? Every line of code is open for inspection.
+            </p>
+            <a
+              href="https://github.com/kru5hna/privault"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-[#E41613] transition-colors font-mono"
+            >
+              <span className="text-micro">GitHub</span>
+              <span className="inline-block text-lg">&rarr;</span>
+            </a>
+          </div>
+        </FadeUp>
       </div>
     </section>
   );
@@ -231,15 +313,16 @@ function CtaSection() {
         </FadeUp>
         <FadeUp delay={0.1}>
           <h2 className="font-serif text-3xl sm:text-4xl md:text-6xl font-light text-white leading-tight mb-8">
-            Your privacy is not
+            Stop trusting.
             <br />
-            <span className="italic text-[#E41613]">negotiable.</span>
+            <span className="italic text-[#E41613]">Start proving.</span>
           </h2>
         </FadeUp>
         <FadeUp delay={0.2}>
           <p className="text-base text-white/40 font-light leading-relaxed mb-12 max-w-lg mx-auto">
-            Create your encrypted vault in seconds. No credit card, no tracking,
-            no compromises. Just pure client-side security.
+            Create your vault in seconds. No credit card. No tracking. No
+            &quot;we take your privacy seriously&quot; marketing fluff. Just
+            encryption that actually works the way you think it does.
           </p>
         </FadeUp>
         <FadeUp delay={0.3}>

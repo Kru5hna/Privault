@@ -11,8 +11,13 @@ export function LandingNav() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0A0A0A]/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5">
-        <div className="hidden md:block">
-          <span className="text-micro text-[#999]">Secure Vault</span>
+        <div className="hidden md:flex items-center gap-8">
+          <a href="/security" className="text-micro text-[#999] hover:text-white transition-colors">
+            Security
+          </a>
+          <a href="#faq" className="text-micro text-[#999] hover:text-white transition-colors">
+            FAQ
+          </a>
         </div>
 
         <Link

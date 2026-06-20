@@ -1,7 +1,7 @@
 mod handlers;
 mod models;
 
-pub use models::TagMetadata;
+
 
 use axum::{
     routing::{delete, get, post},

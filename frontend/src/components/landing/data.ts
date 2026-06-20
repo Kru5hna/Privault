@@ -7,43 +7,43 @@ export const LANDING_STATS = [
 
 export const VAULT_FEATURES = [
   {
-    title: "No Server Access",
-    desc: "Your files are locked before they leave your device. We couldn't read them even if we tried.",
+    title: "Not Even We Can Read Them",
+    desc: "Your files are locked in your browser before touching our servers. A subpoena? A hack? Doesn't matter. There's nothing to seize.",
   },
   {
-    title: "Local Cryptography",
-    desc: "Everything runs directly in your browser. No extra software needed, just pure web standard security.",
+    title: "No Backdoors. No Exceptions.",
+    desc: "Every line of crypto runs in your browser using standard Web Crypto APIs. We can't add a backdoor even if we wanted to — your keys never reach us.",
   },
   {
-    title: "Military Grade",
-    desc: "We use the same encryption standards trusted by governments and financial institutions worldwide.",
+    title: "Share Without Trusting",
+    desc: "Share links where the decryption key lives in the URL fragment. It never touches our servers. Expire them. Limit downloads. Stay in control.",
   },
   {
-    title: "Open & Auditable",
-    desc: "Our cryptographic implementations use standard Web Crypto APIs that are built directly into your browser.",
+    title: "Your Password Is The Only Key",
+    desc: "Forget your password? Your data is gone forever. That's not a bug — that's the whole point. If we could recover it, so could an attacker.",
   },
 ] as const;
 
 export const SECURITY_STRATEGIES = [
   {
     num: "01",
-    title: "Pre-Upload Locks",
-    desc: "Your files are mathematically scrambled directly on your device before they even begin uploading.",
+    title: "Encrypt Before Upload",
+    desc: "AES-256-GCM locks every file in your browser before a single byte leaves for our server. We store ciphertext. That's it.",
   },
   {
     num: "02",
-    title: "Personal Key Set",
-    desc: "We generate a unique master key just for you. Every single file gets its own uncrackable lock, and only your key fits.",
+    title: "Every File Gets Its Own Key",
+    desc: "A unique Data Encryption Key (DEK) is generated per file, then wrapped with your RSA-2048 public key. One leaked key = one file, not your whole vault.",
   },
   {
     num: "03",
-    title: "Zero-Knowledge",
-    desc: "We never store your real password. We mathematically verify your identity without ever learning your secret.",
+    title: "Dual-Path Password Derivation",
+    desc: "Your password derives two independent secrets via PBKDF2 with separate salts. Compromising the auth path doesn't touch your encryption keys.",
   },
   {
     num: "04",
-    title: "Complete Control",
-    desc: "Everything from searching to opening your documents happens privately on your screen. Nothing leaks.",
+    title: "Session Tokens, Not JWTs",
+    desc: "No JWT signing. Login creates a random 32-byte token, SHA-256 hashed before storage. If our DB leaks, sessions can't be forged.",
   },
 ] as const;
 
@@ -115,46 +115,67 @@ export const HERO_DOCUMENTS = [
   },
 ] as const;
 
+export const CHALLENGE_STEPS = [
+  {
+    step: "01",
+    title: "Upload a sensitive file",
+    desc: "A contract. A passport scan. Your startup's financials. Something you'd never want leaked.",
+    highlight: false,
+  },
+  {
+    step: "02",
+    title: "We'll give you DB access",
+    desc: "We'll literally hand you a dump of our database. No redactions. No excuses.",
+    highlight: true,
+  },
+  {
+    step: "03",
+    title: "Try to read your file",
+    desc: "Go ahead. Run it past every cryptoanalyst you know. All you'll find is AES-256-GCM ciphertext and wrapped keys that only exist in your browser's memory.",
+    highlight: false,
+  },
+] as const;
+
 export const FAQ_ITEMS = [
 {
-question: "Can Privault see my files?",
-answer:
-"No. Your files are encrypted before they leave your device and can only be decrypted by you. Privault stores encrypted data, not readable documents.",
+  question: "Can Privault read my files?",
+  answer:
+    "No. And we can prove it. Your files are encrypted with AES-256-GCM before they leave your browser. The key never touches our servers. If our CTO tried to read your file, they'd see the same thing a hacker would: meaningless ciphertext.",
 },
 {
-question: "How is Privault different from Google Drive or Dropbox?",
-answer:
-"Traditional cloud storage providers can access your files if needed. Privault encrypts files before upload, so even we cannot see, read, or scan the contents of your documents.",
+  question: "How is this different from Google Drive / Dropbox / iCloud?",
+  answer:
+    "They claim 'encrypted at rest.' They hold the keys. They can read your files, comply with government requests, and scan your content for ads or AI training. We physically cannot. Your data is locked before it reaches us. There is no 'except with a court order.' There is no 'except for law enforcement.' The key is in your browser, not our database.",
 },
 {
-question: "What happens if I forget my master password?",
-answer:
-"Because Privault is built around privacy, we cannot recover your master password or unlock your vault for you. We strongly recommend storing it in a trusted password manager.",
+  question: "What if your servers get hacked?",
+  answer:
+    "They will get hacked. Every server does eventually. The difference is that our servers store only AES-256-GCM ciphertext and RSA-wrapped keys. Without your password (which never reaches us) and your private key (which never leaves your browser), the data is mathematically unreadable. Hack us. You'll find nothing useful.",
 },
 {
-question: "Can I securely share files with other people?",
-answer:
-"Yes. You can generate secure share links with optional expiration dates and download limits. Anyone with the complete link can access the file without creating an account.",
+  question: "What happens if I forget my password?",
+  answer:
+    "Your data is gone forever. Permanently. Irrecoverably. We cannot reset your password, send a recovery email, or unlock your vault. This is a feature, not a flaw. If we could recover your data, so could a government with a subpoena or a hacker with DB access. Store your password in a trusted manager.",
 },
 {
-question: "What happens if Privault's servers are hacked?",
-answer:
-"Attackers would only obtain encrypted files. Without the required encryption keys, the contents remain unreadable and cannot be accessed.",
+  question: "Can I share files securely?",
+  answer:
+    "Yes. Privault generates share links where the decryption key is embedded in the URL fragment — the part of the URL that never reaches our server. You can set expiration dates and download limits. Even we cannot access the files you share.",
 },
 {
-question: "Are my files encrypted while uploading?",
-answer:
-"Yes. Files are encrypted in your browser before upload, remain encrypted while being transferred, and stay encrypted while stored on our servers.",
+  question: "Is this open source? Can I audit the code?",
+  answer:
+    "Yes. Privault is fully open source. The complete codebase is available on GitHub. The cryptographic implementation uses the Web Crypto API — the same standards your browser uses for HTTPS. No custom crypto. No roll-your-own math. You can verify every line.",
 },
 {
-question: "Can Privault employees access my documents?",
-answer:
-"No. Decryption happens on your device, not on our servers. Even system administrators cannot view the contents of your files.",
+  question: "Can I trust a closed-source alternative like... anything?",
+  answer:
+    "Every major cloud provider has had data breaches. Google Drive, Dropbox, iCloud — all of them. They can also be legally compelled to hand over your data. With Privault, there's nothing to hand over. The encrypted data is useless without your keys, and we don't have them.",
 },
 {
-question: "Who owns my data?",
-answer:
-"You do. Your files remain your property at all times. Privault never claims ownership of your content and cannot access it.",
+  question: "Who should use Privault?",
+  answer:
+    "Journalists protecting sources. Lawyers with confidentiality obligations. Freelancers storing client NDAs and contracts. Anyone who has ever felt uneasy uploading their passport to a random website. If you have files that would damage you if leaked, you need Privault.",
 },
 ] as const;
 

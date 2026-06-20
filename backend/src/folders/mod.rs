@@ -1,7 +1,7 @@
 mod handlers;
 mod models;
 
-pub use models::FolderMetadata;
+
 
 use axum::{
     routing::{delete, get, patch, post},

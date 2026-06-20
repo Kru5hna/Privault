@@ -48,7 +48,7 @@ export function LandingHero() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.3 }}
             >
-              Private Document Vault
+              Zero-Knowledge Document Vault
             </motion.p>
 
             <h1 className="text-display text-[clamp(2.75rem,16vw,8rem)] sm:text-[clamp(3.3rem,7vw,7rem)] text-white mb-0">
@@ -57,7 +57,7 @@ export function LandingHero() {
               </RevealText>
               <RevealText delay={0.55}>
                 <span className="block">
-                  Your <br />{" "}
+                  Your  {" "}
                   <span className="text-display-bold text-[#E41613] relative">
                     Rules
                     <motion.span
@@ -81,8 +81,11 @@ export function LandingHero() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 1.0 }}
             >
-              Store private documents in a vault only you can unlock. Simple,
-              secure, and built so even we can&apos;t read your files.
+              Not Google Drive. Not Dropbox. A vault where files are encrypted
+              before they ever leave your browser. Even we can&apos;t peek.
+              <span className="block mt-2 text-[#E41613]/100 text-xs tracking-wider">
+                Hack our server. You&apos;ll find nothing but gibberish.
+              </span>
             </motion.p>
 
             <motion.div
@@ -101,8 +104,8 @@ export function LandingHero() {
                 </Link>
               </MagneticButton>
 
-              <a href="#about" className="btn-outline w-full sm:w-auto">
-                See How It Works
+              <a href="#challenge" className="btn-outline w-full sm:w-auto">
+                Try to Break In
                 <motion.span
                   className="inline-block"
                   animate={{ y: [0, 4, 0] }}
