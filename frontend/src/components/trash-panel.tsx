@@ -19,7 +19,7 @@ interface TrashPanelProps {
   isSandbox: boolean;
   onRefresh: () => Promise<void>;
   trashTagId: string | null;
-  setDemoDocs: React.Dispatch<React.SetStateAction<any[]>>;
+  setDemoDocs: React.Dispatch<React.SetStateAction<DocumentMetadata[]>>;
 }
 
 export function TrashPanel({
@@ -57,8 +57,8 @@ export function TrashPanel({
       
       logActivity(user.userId, "Restore", `Restored document ${doc.name}`);
       await onRefresh();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to restore document");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to restore document");
     } finally {
       setProcessing(false);
     }
@@ -78,8 +78,8 @@ export function TrashPanel({
       logActivity(user.userId, "Delete", `Permanently deleted document ${doc.name}`);
       setConfirmDeleteDoc(null);
       await onRefresh();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to delete document permanently");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete document permanently");
     } finally {
       setProcessing(false);
     }
@@ -103,8 +103,8 @@ export function TrashPanel({
       logActivity(user.userId, "Delete", "Emptied secure trash bin");
       setConfirmEmpty(false);
       await onRefresh();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to empty trash");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to empty trash");
     } finally {
       setProcessing(false);
     }
@@ -240,7 +240,7 @@ export function TrashPanel({
               Permanent Deletion
             </h3>
             <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
-              Are you sure you want to permanently delete <span className="text-white font-semibold">"{confirmDeleteDoc.name}"</span>? There is no way to recover this file.
+              Are you sure you want to permanently delete <span className="text-white font-semibold">&quot;{confirmDeleteDoc.name}&quot;</span>? There is no way to recover this file.
             </p>
             <div className="flex gap-3">
               <button
