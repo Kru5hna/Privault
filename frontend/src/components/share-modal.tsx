@@ -37,6 +37,7 @@ export function ShareModal({
   const [expiryPreset, setExpiryPreset] = useState<string>("24h");
   const [downloadLimit, setDownloadLimit] = useState<string>("");
   const [isUnlimited, setIsUnlimited] = useState<boolean>(true);
+  const [permission, setPermission] = useState<"download" | "view">("download");
   const [generating, setGenerating] = useState<boolean>(false);
   const [generatedLink, setGeneratedLink] = useState<string>("");
   const [copied, setCopied] = useState<boolean>(false);
@@ -97,7 +98,8 @@ export function ShareModal({
       // 1. Re-encrypt the DEK with a random symmetric Link Key in the browser
       const { linkKey, reEncryptedDek, ownerEncryptedLinkKey } = await encryptDekForSharing(
         doc.encrypted_dek,
-        privateKey
+        privateKey,
+        permission
       );
 
       // 2. Compute parameters
@@ -116,7 +118,7 @@ export function ShareModal({
 
       // 4. Construct URL with Link Key in the hash fragment (never sent to server!)
       const origin = window.location.origin;
-      const shareUrl = `${origin}/share/${share.id}#${linkKey}`;
+      const shareUrl = `${origin}/share/${share.id}#${linkKey}:${permission}`;
       setGeneratedLink(shareUrl);
       toast.success("Cryptographic share link generated!");
       
@@ -214,6 +216,37 @@ export function ShareModal({
                       {p.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Permissions selector */}
+              <div>
+                <label className="block text-[10px] font-bold text-[#8E929F] tracking-widest uppercase mb-2">
+                  Link Permissions
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPermission("download")}
+                    className={`py-2 text-[10px] font-bold tracking-wider transition-colors border cursor-pointer ${
+                      permission === "download"
+                        ? "bg-[#E41613]/10 border-[#E41613] text-white"
+                        : "bg-[#15161A] border-white/5 text-[#8E929F] hover:border-white/20 hover:text-white"
+                    }`}
+                  >
+                    ALLOW DOWNLOAD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPermission("view")}
+                    className={`py-2 text-[10px] font-bold tracking-wider transition-colors border cursor-pointer ${
+                      permission === "view"
+                        ? "bg-[#E41613]/10 border-[#E41613] text-white"
+                        : "bg-[#15161A] border-white/5 text-[#8E929F] hover:border-white/20 hover:text-white"
+                    }`}
+                  >
+                    PREVIEW ONLY (NO DOWNLOAD)
+                  </button>
                 </div>
               </div>
 
@@ -341,9 +374,9 @@ export function ShareModal({
                           onClick={async () => {
                             if (!privateKey) return;
                             try {
-                              const decryptedKey = await decryptOwnerLinkKey(s.owner_encrypted_link_key!, privateKey);
+                              const decryptedData = await decryptOwnerLinkKey(s.owner_encrypted_link_key!, privateKey);
                               const origin = window.location.origin;
-                              const shareUrl = `${origin}/share/${s.id}#${decryptedKey}`;
+                              const shareUrl = `${origin}/share/${s.id}#${decryptedData.linkKey}:${decryptedData.permission}`;
                               navigator.clipboard.writeText(shareUrl);
                               toast.success("Share link copied to clipboard");
                             } catch (err) {
