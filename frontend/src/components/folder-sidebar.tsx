@@ -11,9 +11,9 @@ import {
   Plus, 
   Share2, 
   HardDrive, 
-  X,
   FolderOpen,
-  History
+  History,
+  Loader2
 } from "lucide-react";
 
 interface TreeNode {
@@ -49,10 +49,11 @@ export function FolderSidebar({
   sessionToken,
 }: FolderSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [showNewFolderInput, setShowNewFolderInput] = useState<string | null>(null); // folderId or "root" or null
+  const [showNewFolderInput, setShowNewFolderInput] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Build tree structure
   const tree = useMemo(() => {
@@ -111,6 +112,7 @@ export function FolderSidebar({
   const handleCreateFolderSubmit = async (e: React.FormEvent, parentId: string | null) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
+    setIsProcessing(true);
     try {
       await onCreateFolder(newFolderName.trim(), parentId);
       setNewFolderName("");
@@ -120,18 +122,23 @@ export function FolderSidebar({
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleRenameSubmit = async (e: React.FormEvent, folderId: string) => {
     e.preventDefault();
     if (!renameFolderName.trim() || !onRenameFolder) return;
+    setIsProcessing(true);
     try {
       await onRenameFolder(folderId, renameFolderName.trim());
       setEditingFolderId(null);
       setRenameFolderName("");
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -196,7 +203,12 @@ export function FolderSidebar({
                 />
               </form>
             ) : (
-              <span className="text-xs truncate font-medium">{folder.name}</span>
+              <span className="text-xs truncate font-medium">
+              {isProcessing && isSelected ? (
+                <Loader2 size={10} className="inline animate-spin mr-1 text-[#E41613]" />
+              ) : null}
+              {folder.name}
+            </span>
             )}
           </div>
 
@@ -338,10 +350,10 @@ export function FolderSidebar({
               setViewMode("vault");
               handleFolderClick(null);
             }}
-            className={`flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold tracking-wide text-left transition-all border ${
+            className={`flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold tracking-wide border-l-2 text-left transition-all ${
               viewMode === "vault" && currentFolderId === null
                 ? "bg-[#1E2026] text-white border-[#E41613]"
-                : "text-[#8E929F] border-white/10 bg-[#16171C]/40 hover:bg-[#1C1D22] hover:text-white hover:border-white/30"
+                : "text-[#8E929F] border-white/10 hover:bg-[#16171C] hover:text-white hover:border-white/30"
             }`}
           >
             <HardDrive size={15} />
