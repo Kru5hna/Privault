@@ -1,8 +1,23 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { AdvancedViewer } from "./advanced-viewer";
+import React, { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { Loader2, ShieldCheck, X } from "lucide-react";
+
+const AdvancedViewer = dynamic(
+  () => import("./advanced-viewer").then((mod) => ({ default: mod.AdvancedViewer })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center gap-3 py-16">
+        <Loader2 size={24} className="animate-spin text-[#E41613]" />
+        <span className="text-xs tracking-widest uppercase text-white/30 font-bold">
+          LOADING VIEWER...
+        </span>
+      </div>
+    ),
+  }
+);
 
 interface FilePreviewModalProps {
   isOpen: boolean;
@@ -12,42 +27,35 @@ interface FilePreviewModalProps {
 }
 
 export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FilePreviewModalProps) {
-  const [mimeType, setMimeType] = useState<string>("application/octet-stream");
-
-  useEffect(() => {
-    if (isOpen && fileBytes) {
-      // Determine the mime type from file extension
-      const ext = fileName.split(".").pop()?.toLowerCase() || "";
-      const mimeMap: Record<string, string> = {
-        pdf: "application/pdf",
-        png: "image/png",
-        jpg: "image/jpeg",
-        jpeg: "image/jpeg",
-        gif: "image/gif",
-        webp: "image/webp",
-        svg: "image/svg+xml",
-        bmp: "image/bmp",
-        mp4: "video/mp4",
-        webm: "video/webm",
-        ogg: "video/ogg",
-        mov: "video/mp4",
-        txt: "text/plain",
-        md: "text/markdown",
-        json: "application/json",
-        csv: "text/csv",
-        html: "text/html",
-        xml: "text/xml",
-        js: "text/javascript",
-        ts: "text/typescript",
-        jsx: "text/jsx",
-        tsx: "text/tsx",
-        rs: "text/rust",
-        py: "text/python",
-        css: "text/css",
-      };
-      setMimeType(mimeMap[ext] || "application/octet-stream");
-    }
-  }, [isOpen, fileBytes, fileName]);
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const mimeMap: Record<string, string> = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    bmp: "image/bmp",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    ogg: "video/ogg",
+    mov: "video/mp4",
+    txt: "text/plain",
+    md: "text/markdown",
+    json: "application/json",
+    csv: "text/csv",
+    html: "text/html",
+    xml: "text/xml",
+    js: "text/javascript",
+    ts: "text/typescript",
+    jsx: "text/jsx",
+    tsx: "text/tsx",
+    rs: "text/rust",
+    py: "text/python",
+    css: "text/css",
+  };
+  const mimeType = mimeMap[ext] || "application/octet-stream";
 
   if (!isOpen) return null;
 
@@ -104,12 +112,19 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
             </div>
           ) : (
             <div className="relative z-10 w-full h-full flex items-center justify-center">
-              <AdvancedViewer 
-                fileName={fileName}
-                fileBytes={fileBytes}
-                mimeType={mimeType}
-                allowDownload={true}
-              />
+              <Suspense fallback={
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 size={24} className="animate-spin text-[#E41613]" />
+                  <span className="text-xs tracking-widest uppercase text-white/30">LOADING VIEWER...</span>
+                </div>
+              }>
+                <AdvancedViewer 
+                  fileName={fileName}
+                  fileBytes={fileBytes}
+                  mimeType={mimeType}
+                  allowDownload={true}
+                />
+              </Suspense>
             </div>
           )}
         </div>
