@@ -12,7 +12,8 @@ import {
   Share2, 
   HardDrive, 
   X,
-  FolderOpen
+  FolderOpen,
+  History
 } from "lucide-react";
 
 interface TreeNode {
@@ -27,8 +28,8 @@ interface FolderSidebarProps {
   onCreateFolder: (name: string, parentId: string | null) => Promise<void>;
   onDeleteFolder?: (folderId: string) => Promise<void>;
   onRenameFolder?: (folderId: string, newName: string) => Promise<void>;
-  viewMode: "vault" | "shares";
-  setViewMode: (mode: "vault" | "shares") => void;
+  viewMode: "vault" | "shares" | "trash" | "activity";
+  setViewMode: (mode: "vault" | "shares" | "trash" | "activity") => void;
   isOpen: boolean;
   onClose: () => void;
   sessionToken?: string;
@@ -322,14 +323,11 @@ export function FolderSidebar({
         }`}
       >
         {/* Header */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-[#1E2026]">
+        <div className="h-16 flex items-center justify-between px-4 pl-14 border-b border-[#1E2026]">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 bg-[#E41613] animate-pulse rounded-full" />
             <span className="text-sm font-semibold tracking-wider text-white">PRIVAULT NAVIGATOR</span>
           </div>
-          <button onClick={onClose} className="p-1 text-[#8E929F] hover:text-white md:hidden">
-            <X size={18} />
-          </button>
         </div>
 
         {/* Navigation Categories */}
@@ -366,6 +364,42 @@ export function FolderSidebar({
           >
             <Share2 size={15} />
             <span>SHARED LINKS</span>
+          </button>
+
+          {/* Recycle Bin (Trash) */}
+          <button
+            onClick={() => {
+              setViewMode("trash");
+              if (window.innerWidth < 768) {
+                onClose();
+              }
+            }}
+            className={`flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold tracking-wide border-l-2 text-left transition-all ${
+              viewMode === "trash"
+                ? "bg-[#1E2026] text-white border-[#E41613]"
+                : "text-[#8E929F] border-transparent hover:bg-[#16171C] hover:text-white"
+            }`}
+          >
+            <Trash2 size={15} />
+            <span>RECYCLE BIN</span>
+          </button>
+
+          {/* Activity Log */}
+          <button
+            onClick={() => {
+              setViewMode("activity");
+              if (window.innerWidth < 768) {
+                onClose();
+              }
+            }}
+            className={`flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold tracking-wide border-l-2 text-left transition-all ${
+              viewMode === "activity"
+                ? "bg-[#1E2026] text-white border-[#E41613]"
+                : "text-[#8E929F] border-transparent hover:bg-[#16171C] hover:text-white"
+            }`}
+          >
+            <History size={15} />
+            <span>ACTIVITY HISTORY</span>
           </button>
         </div>
 
