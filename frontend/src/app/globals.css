@@ -543,3 +543,29 @@ html.lenis, html.lenis body {
     @apply font-sans;
   }
 }
+
+/* PDF.js Text Layer Overlay */
+.textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1.0;
+}
+
+.textLayer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer mark {
+  background-color: rgba(245, 158, 11, 0.4) !important;
+  color: transparent !important;
+  border-bottom: 1px solid #E41613;
+}
