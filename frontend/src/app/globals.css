@@ -569,3 +569,19 @@ html.lenis, html.lenis body {
   color: transparent !important;
   border-bottom: 1px solid #E41613;
 }
+
+/* Virtualized document table grid layout */
+.doc-row-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto 380px;
+  gap: 0;
+}
+
+@media (max-width: 639px) {
+  .doc-row-grid {
+    grid-template-columns: 1fr;
+    padding: 0.875rem;
+    border: 1px solid var(--border-light);
+    margin-bottom: 0.75rem;
+  }
+}
