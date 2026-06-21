@@ -10,6 +10,7 @@ use rand::RngCore;
 use sqlx::Row;
 
 use crate::error::AppError;
+use crate::audit;
 use super::models::*;
 use super::session::{AuthSession, hash_token};
 
@@ -57,11 +58,20 @@ pub async fn register(
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Argon2 hash failed: {}", e)))?
         .to_string();
 
+    // Generate recovery phrase and store hashes
+    let recovery_words = crate::recovery::generate_phrase();
+    let recovery_phrase = crate::recovery::phrase_to_string(&recovery_words);
+    let phrase_hash = crate::recovery::hash_phrase(&recovery_phrase);
+    let recovery_auth_verifier = crate::recovery::derive_recovery_auth_verifier(&recovery_phrase);
+    let recovery_auth_hash = crate::recovery::hash_recovery_auth_verifier(&recovery_auth_verifier)?;
+
     // Insert the new user
     let row = sqlx::query(
         r#"
-        INSERT INTO users (username, auth_hash, auth_salt, kek_salt, public_key, wrapped_private_key, wrapped_private_key_iv)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO users (username, auth_hash, auth_salt, kek_salt, public_key,
+                           wrapped_private_key, wrapped_private_key_iv,
+                           recovery_phrase_hash, recovery_auth_hash)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
         "#,
     )
@@ -72,15 +82,28 @@ pub async fn register(
     .bind(&payload.public_key)
     .bind(&payload.wrapped_private_key)
     .bind(&payload.wrapped_private_key_iv)
+    .bind(&phrase_hash)
+    .bind(&recovery_auth_hash)
     .fetch_one(&state.db)
     .await?;
 
     let user_id: uuid::Uuid = row.get("id");
     tracing::info!("New user registered: {} ({})", payload.username, user_id);
 
+    audit::log_event(
+        &state.db,
+        user_id,
+        audit::EVENT_RECOVERY_PHRASE_GENERATED,
+        None,
+        None,
+        None,
+        None,
+    ).await;
+
     Ok(Json(RegisterResponse {
         id: user_id.to_string(),
         message: "User registered successfully".to_string(),
+        recovery_phrase: Some(recovery_phrase),
     }))
 }
 
@@ -153,6 +176,16 @@ pub async fn login(
     let username: String = row.get("username");
     tracing::info!("User logged in: {} ({})", username, user_id);
 
+    audit::log_event(
+        &state.db,
+        user_id,
+        audit::EVENT_LOGIN,
+        Some(audit::RESOURCE_SESSION),
+        None,
+        None,
+        None,
+    ).await;
+
     Ok(Json(LoginResponse {
         message: "Login successful".to_string(),
         session_token,
@@ -181,6 +214,16 @@ pub async fn logout(
         .await?;
 
     tracing::info!("User logged out: {} ({})", session.username, session.user_id);
+
+    audit::log_event(
+        &state.db,
+        session.user_id,
+        audit::EVENT_LOGOUT,
+        Some(audit::RESOURCE_SESSION),
+        None,
+        None,
+        None,
+    ).await;
 
     Ok(Json(MessageResponse {
         message: "Logged out successfully".to_string(),
