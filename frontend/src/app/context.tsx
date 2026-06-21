@@ -10,6 +10,7 @@ import {
   wrapPrivateKey,
   unwrapPrivateKey,
   generateSalt,
+  generateMnemonic,
 } from "@/lib/crypto";
 import {
   apiLogin,
@@ -147,6 +148,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 2. Derive auth verifier and KEK from password + respective salts
       const authVerifier = await deriveAuthVerifier(password, authSalt);
       const KEK = await deriveKEK(password, kekSalt);
+
+      // Generate the 12-word recovery phrase during registration
+      const mnemonic = await generateMnemonic();
+      sessionStorage.setItem("privault_mnemonic_temp", mnemonic);
+      sessionStorage.setItem("privault_show_recovery", "true");
 
       // 3. Generate RSA keypair
       const keyPair = await generateRSAKeyPair();
