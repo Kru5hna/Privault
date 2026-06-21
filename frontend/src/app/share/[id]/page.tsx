@@ -102,18 +102,23 @@ export default function ShareLandingPage() {
   const [shareMeta, setShareMeta] = useState<ShareLinkMetadata | null>(null);
   const [linkKey, setLinkKey] = useState<string>(""); // Avoid empty space issues
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewType, setPreviewType] = useState<string>("");
+  const [previewType, setPreviewType] = useState<string>("unknown");
+  const [permission, setPermission] = useState<"download" | "view">("download");
 
-  // Extract the Link Key from the hash fragment on mount safely
+  // Extract the Link Key and permission from the hash fragment on mount safely
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.length > 1) {
-      const extracted = hash.substring(1);
+      const hashStr = hash.substring(1);
+      const parts = hashStr.split(":");
+      const extractedKey = parts[0];
+      const extractedPermission = parts[1] === "view" ? "view" : "download";
       setTimeout(() => {
-        setLinkKey(extracted);
+        setLinkKey(extractedKey);
+        setPermission(extractedPermission);
       }, 0);
     }
-  }, [setLinkKey]);
+  }, [setLinkKey, setPermission]);
 
   // Fetch share metadata once we have the shareId
   useEffect(() => {
@@ -351,15 +356,22 @@ export default function ShareLandingPage() {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleDecryptAndDownload}
-                className="btn-primary py-2 px-4 cursor-pointer text-xs"
-              >
-                <span className="btn-bg"></span>
-                <span className="btn-text flex items-center gap-2">
-                  <Download size={14} /> DOWNLOAD
+              {permission !== "view" && (
+                <button
+                  onClick={handleDecryptAndDownload}
+                  className="btn-primary py-2 px-4 cursor-pointer text-xs"
+                >
+                  <span className="btn-bg"></span>
+                  <span className="btn-text flex items-center gap-2">
+                    <Download size={14} /> DOWNLOAD
+                  </span>
+                </button>
+              )}
+              {permission === "view" && (
+                <span className="text-xs font-bold uppercase tracking-wider text-[#E41613] bg-[#E41613]/10 border border-[#E41613]/20 px-3 py-1.5 rounded">
+                  VIEW ONLY
                 </span>
-              </button>
+              )}
               <button
                 onClick={() => {
                   if (previewUrl) window.URL.revokeObjectURL(previewUrl);
@@ -485,28 +497,53 @@ export default function ShareLandingPage() {
 
           {/* Action Buttons */}
           <div className="p-6 space-y-3">
-            <button
-              onClick={handleDecryptAndDownload}
-              disabled={!linkKey}
-              className={`w-full btn-primary py-3.5 cursor-pointer ${
-                !linkKey ? "opacity-40 cursor-not-allowed" : ""
-              }`}
-            >
-              <span className="btn-bg"></span>
-              <span className="btn-text flex items-center justify-center gap-2 text-sm">
-                <Download size={16} />
-                DECRYPT & DOWNLOAD
-              </span>
-            </button>
+            {permission !== "view" ? (
+              <>
+                <button
+                  onClick={handleDecryptAndDownload}
+                  disabled={!linkKey}
+                  className={`w-full btn-primary py-3.5 cursor-pointer ${
+                    !linkKey ? "opacity-40 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <span className="btn-bg"></span>
+                  <span className="btn-text flex items-center justify-center gap-2 text-sm">
+                    <Download size={16} />
+                    DECRYPT & DOWNLOAD
+                  </span>
+                </button>
 
-            {shareMeta && isPreviewable(shareMeta.document_name) && linkKey && (
-              <button
-                onClick={handlePreview}
-                className="w-full py-3 text-xs font-bold uppercase tracking-widest text-[#8E929F] hover:text-white border border-white/10 hover:border-white/20 transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Eye size={14} />
-                Preview in Browser
-              </button>
+                {shareMeta && isPreviewable(shareMeta.document_name) && linkKey && (
+                  <button
+                    onClick={handlePreview}
+                    className="w-full py-3 text-xs font-bold uppercase tracking-widest text-[#8E929F] hover:text-white border border-white/10 hover:border-white/20 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Eye size={14} />
+                    Preview in Browser
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {shareMeta && isPreviewable(shareMeta.document_name) && linkKey ? (
+                  <button
+                    onClick={handlePreview}
+                    className="w-full btn-primary py-3.5 cursor-pointer"
+                  >
+                    <span className="btn-bg"></span>
+                    <span className="btn-text flex items-center justify-center gap-2 text-sm">
+                      <Eye size={16} />
+                      PREVIEW SECURE FILE
+                    </span>
+                  </button>
+                ) : (
+                  <div className="text-center p-4 bg-red-500/5 border border-red-500/20 rounded">
+                    <p className="text-xs text-red-400 font-semibold leading-relaxed">
+                      This file is View Only, but this file type cannot be previewed in the browser. Downloading is disabled by the owner.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
