@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { AuthProvider } from "@/app/context";
+import { QueryProvider } from "@/lib/query-provider";
 import UnlockModal from "@/components/unlock-modal";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -45,13 +46,16 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>
-          {children}
-          <UnlockModal />
-          <Toaster theme="dark" position="bottom-right" />
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>
+            {children}
+            <UnlockModal />
+            <Toaster theme="dark" position="bottom-right" />
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );
