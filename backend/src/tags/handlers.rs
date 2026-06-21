@@ -31,17 +31,16 @@ pub async fn create_tag(
 
     let color = payload.color.unwrap_or_else(|| "#E41613".to_string());
 
-    let tag = sqlx::query_as!(
-        TagMetadata,
+    let tag = sqlx::query_as::<_, TagMetadata>(
         r#"
         INSERT INTO tags (owner_id, name, color)
         VALUES ($1, $2, $3)
         RETURNING id, owner_id, name, color, created_at
         "#,
-        session.user_id,
-        payload.name,
-        color
     )
+    .bind(session.user_id)
+    .bind(&payload.name)
+    .bind(&color)
     .fetch_one(&state.db)
     .await
     .map_err(|e| {
@@ -63,16 +62,15 @@ pub async fn list_tags(
     session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TagMetadata>>, AppError> {
-    let tags = sqlx::query_as!(
-        TagMetadata,
+    let tags = sqlx::query_as::<_, TagMetadata>(
         r#"
         SELECT id, owner_id, name, color, created_at
         FROM tags
         WHERE owner_id = $1
         ORDER BY name ASC
         "#,
-        session.user_id
     )
+    .bind(session.user_id)
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
@@ -89,14 +87,14 @@ pub async fn delete_tag(
     Path(tag_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let result = sqlx::query!(
+    let result = sqlx::query(
         r#"
         DELETE FROM tags 
         WHERE id = $1 AND owner_id = $2
         "#,
-        tag_id,
-        session.user_id
     )
+    .bind(tag_id)
+    .bind(session.user_id)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -121,7 +119,9 @@ pub async fn tag_document(
     Json(payload): Json<TagDocumentRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // 1. Verify user owns the document
-    let doc = sqlx::query!("SELECT id FROM documents WHERE id = $1 AND owner_id = $2", doc_id, session.user_id)
+    let doc = sqlx::query("SELECT id FROM documents WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL")
+        .bind(doc_id)
+        .bind(session.user_id)
         .fetch_optional(&state.db)
         .await
         .map_err(|_| AppError::Internal(anyhow::anyhow!("DB Error")))?;
@@ -131,7 +131,9 @@ pub async fn tag_document(
     }
 
     // 2. Verify user owns the tag
-    let tag = sqlx::query!("SELECT id FROM tags WHERE id = $1 AND owner_id = $2", payload.tag_id, session.user_id)
+    let tag = sqlx::query("SELECT id FROM tags WHERE id = $1 AND owner_id = $2")
+        .bind(payload.tag_id)
+        .bind(session.user_id)
         .fetch_optional(&state.db)
         .await
         .map_err(|_| AppError::Internal(anyhow::anyhow!("DB Error")))?;
@@ -141,15 +143,15 @@ pub async fn tag_document(
     }
 
     // 3. Insert relationship
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO document_tags (document_id, tag_id)
         VALUES ($1, $2)
         ON CONFLICT DO NOTHING
         "#,
-        doc_id,
-        payload.tag_id
     )
+    .bind(doc_id)
+    .bind(payload.tag_id)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -167,7 +169,9 @@ pub async fn untag_document(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // 1. Verify user owns the document
-    let doc = sqlx::query!("SELECT id FROM documents WHERE id = $1 AND owner_id = $2", doc_id, session.user_id)
+    let doc = sqlx::query("SELECT id FROM documents WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL")
+        .bind(doc_id)
+        .bind(session.user_id)
         .fetch_optional(&state.db)
         .await
         .map_err(|_| AppError::Internal(anyhow::anyhow!("DB Error")))?;
@@ -177,14 +181,14 @@ pub async fn untag_document(
     }
 
     // 2. Delete relationship
-    sqlx::query!(
+    sqlx::query(
         r#"
         DELETE FROM document_tags 
         WHERE document_id = $1 AND tag_id = $2
         "#,
-        doc_id,
-        tag_id
     )
+    .bind(doc_id)
+    .bind(tag_id)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -202,7 +206,9 @@ pub async fn list_document_tags(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TagMetadata>>, AppError> {
     // 1. Verify user owns the document
-    let doc = sqlx::query!("SELECT id FROM documents WHERE id = $1 AND owner_id = $2", doc_id, session.user_id)
+    let doc = sqlx::query("SELECT id FROM documents WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL")
+        .bind(doc_id)
+        .bind(session.user_id)
         .fetch_optional(&state.db)
         .await
         .map_err(|_| AppError::Internal(anyhow::anyhow!("DB Error")))?;
@@ -212,8 +218,7 @@ pub async fn list_document_tags(
     }
 
     // 2. Fetch tags
-    let tags = sqlx::query_as!(
-        TagMetadata,
+    let tags = sqlx::query_as::<_, TagMetadata>(
         r#"
         SELECT t.id, t.owner_id, t.name, t.color, t.created_at
         FROM tags t
@@ -221,8 +226,8 @@ pub async fn list_document_tags(
         WHERE dt.document_id = $1
         ORDER BY t.name ASC
         "#,
-        doc_id
     )
+    .bind(doc_id)
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
