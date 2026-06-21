@@ -1,9 +1,12 @@
 mod auth;
+mod audit;
 mod documents;
 mod error;
 mod folders;
+mod recovery;
 mod shares;
 mod tags;
+mod trash;
 
 use axum::{routing::get, Json, Router};
 use std::net::SocketAddr;
@@ -12,6 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::auth::AuthSession;
 use crate::error::AppError;
+use axum::http::HeaderValue;
 
 /// Shared application state — passed to all handlers via Axum's State extractor.
 #[derive(Clone)]
@@ -36,8 +40,7 @@ async fn main() {
     tracing::info!("Initializing Privault backend...");
 
     // Database connection pool
-    let database_url =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
 
     // Disable prepared statement cache for PgBouncer (Supabase) compatibility
     let db_pool = sqlx::postgres::PgPoolOptions::new()
@@ -53,29 +56,49 @@ async fn main() {
 
     tracing::info!("Database connection established");
 
-    // Ensure local uploads directory exists
+    // Ensure local uploads and thumbnails directories exist
     tokio::fs::create_dir_all("uploads")
         .await
         .expect("Failed to create uploads directory");
+    tokio::fs::create_dir_all("thumbnails")
+        .await
+        .expect("Failed to create thumbnails directory");
 
     let state = AppState { db: db_pool };
 
+    // Run trash cleanup on startup
+    trash::cleanup_expired_trash(&state).await;
+
     // CORS — restrict to known origins in production.
-    // TODO: Read allowed origins from env var for production deployment.
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors_origin =
+        std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let cors = if cors_origin == "*" {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    } else {
+        CorsLayer::new()
+            .allow_origin(
+                cors_origin
+                    .parse::<HeaderValue>()
+                    .expect("Invalid CORS_ORIGIN"),
+            )
+            .allow_methods(Any)
+            .allow_headers(Any)
+    };
 
     // Route tree
     let app = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/me", get(get_me))
         .nest("/api/auth", auth::router())
+        .nest("/api/recovery", recovery::router())
         .nest("/api/documents", documents::router())
         .nest("/api/folders", folders::router())
         .nest("/api/shares", shares::router())
         .nest("/api/tags", tags::router())
+        .nest("/api/trash", trash::router())
         .with_state(state)
         .layer(cors)
         .layer(axum::extract::DefaultBodyLimit::max(100 * 1024 * 1024));
