@@ -1,18 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { 
   ZoomIn, 
   ZoomOut, 
   Maximize2, 
   Minimize2, 
-  ChevronLeft, 
-  ChevronRight, 
   Search, 
   Moon, 
   Sun,
-  Download,
   AlertCircle,
   Loader2
 } from "lucide-react";
@@ -101,7 +98,7 @@ function ImageViewer({ fileBytes, mimeType }: { fileBytes: Uint8Array; mimeType:
   const containerRef = useRef<HTMLDivElement>(null);
 
   const objectUrl = React.useMemo(() => {
-    const blob = new Blob([fileBytes as any], { type: mimeType });
+    const blob = new Blob([fileBytes as unknown as BlobPart], { type: mimeType });
     return URL.createObjectURL(blob);
   }, [fileBytes, mimeType]);
 
@@ -190,26 +187,28 @@ function ImageViewer({ fileBytes, mimeType }: { fileBytes: Uint8Array; mimeType:
 // 2. PDF Viewer Component (Dark Mode, Text Search, Custom Navigation)
 // ─────────────────────────────────────────────────────────────────────────────
 function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
-  const [pdfDoc, setPdfDoc] = useState<any>(null);
-  const [pageNum, setPageNum] = useState(1);
+  interface PDFRenderTask { promise: Promise<void>; cancel: () => void }
+  const [pdfDoc, setPdfDoc] = useState<{ numPages: number; getPage: (n: number) => Promise<{ getViewport: (p: { scale: number }) => { width: number; height: number }; render: (p: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => PDFRenderTask; getTextContent: () => Promise<{ items: { str: string }[] }> }> } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.0);
   const [darkMode, setDarkMode] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightQuery, setHighlightQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ page: number; text: string }[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [rendering, setRendering] = useState(true);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const textLayerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const renderTaskRef = useRef<any>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<Array<{ canvas: HTMLCanvasElement | null; text: HTMLDivElement | null }>>([]);
+  const renderTasksRef = useRef<Map<number, { cancel: () => void; promise: Promise<void> }>>(new Map());
+  const lastPageRef = useRef(1);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHighlightQuery("");
     }
   }, [searchQuery]);
@@ -218,13 +217,16 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
     async function loadPDF() {
       try {
         await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
-        const pdfjsLib = (window as any)["pdfjs-dist/build/pdf"];
+        const pdfjsLib = (window as unknown as Record<string, unknown>)["pdfjs-dist/build/pdf"] as {
+          GlobalWorkerOptions: { workerSrc: string };
+          getDocument: (params: { data: Uint8Array }) => { promise: Promise<{ numPages: number; getPage: (n: number) => unknown }> };
+        };
         pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
         const doc = await pdfjsLib.getDocument({ data: fileBytes }).promise;
-        setPdfDoc(doc);
+        setPdfDoc(doc as never);
         setTotalPages(doc.numPages);
-        setPageNum(1);
+        pageRefs.current = Array.from({ length: doc.numPages }, () => ({ canvas: null, text: null }));
       } catch (err) {
         console.error("PDF loading error:", err);
       }
@@ -232,78 +234,123 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
     loadPDF();
   }, [fileBytes]);
 
-  const renderPage = useCallback(async (num: number, currentScale: number) => {
-    if (!pdfDoc || !canvasRef.current) return;
+  // Render all pages when pdfDoc, scale, darkMode, or highlightQuery change
+  useEffect(() => {
+    const doc = pdfDoc;
+    if (!doc || totalPages === 0) return;
 
-    // Cancel existing render task
-    if (renderTaskRef.current) {
-      renderTaskRef.current.cancel();
-    }
+    let cancelled = false;
 
-    try {
-      const page = await pdfDoc.getPage(num);
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    async function renderAllPages() {
+      setRendering(true);
+      renderTasksRef.current.forEach(task => { try { task.cancel(); } catch {} });
+      renderTasksRef.current.clear();
 
-      const viewport = page.getViewport({ scale: currentScale });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-
-      const renderContext = {
-        canvasContext: ctx,
-        viewport: viewport
+      const pdfjsLib = (window as unknown as Record<string, unknown>)["pdfjs-dist/build/pdf"] as {
+        GlobalWorkerOptions: { workerSrc: string };
+        getDocument: (params: { data: Uint8Array }) => { promise: Promise<unknown> };
+        renderTextLayer: (params: { textContentSource: unknown; container: HTMLElement; viewport: { width: number; height: number }; textDivs: [] }) => { promise: Promise<void> };
       };
 
-      const renderTask = page.render(renderContext);
-      renderTaskRef.current = renderTask;
-      await renderTask.promise;
-      renderTaskRef.current = null;
+      for (let i = 0; i < totalPages; i++) {
+        if (cancelled) break;
 
-      // Render text layer overlay
-      const textLayerContainer = textLayerRef.current;
-      if (textLayerContainer) {
-        textLayerContainer.innerHTML = "";
-        textLayerContainer.style.width = `${viewport.width}px`;
-        textLayerContainer.style.height = `${viewport.height}px`;
+        const pageNum = i + 1;
+        const refs = pageRefs.current[i];
+        if (!refs || !refs.canvas || !refs.text) continue;
 
-        const textContent = await page.getTextContent();
-        const pdfjsLib = (window as any)["pdfjs-dist/build/pdf"];
-        
-        await pdfjsLib.renderTextLayer({
-          textContentSource: textContent,
-          container: textLayerContainer,
-          viewport: viewport,
-          textDivs: []
-        }).promise;
+        const canvas = refs.canvas;
+        const textLayer = refs.text;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
 
-        // Perform search highlight filtering on spans
-        if (highlightQuery.trim()) {
-          const spans = textLayerContainer.querySelectorAll("span");
-          const query = highlightQuery.trim().toLowerCase();
-          
-          spans.forEach((span) => {
-            const text = span.textContent || "";
-            if (text.toLowerCase().includes(query)) {
-              const regex = new RegExp(`(${query})`, "gi");
-              span.innerHTML = text.replace(regex, `<mark>$1</mark>`);
-            }
-          });
+        try {
+          const page = await doc!.getPage(pageNum);
+          const viewport = page.getViewport({ scale });
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.style.filter = darkMode ? "invert(0.9) hue-rotate(180deg)" : "none";
+
+          const renderTask = page.render({ canvasContext: ctx, viewport });
+          renderTasksRef.current.set(pageNum, renderTask);
+          await renderTask.promise;
+          renderTasksRef.current.delete(pageNum);
+
+          textLayer.innerHTML = "";
+          textLayer.style.width = `${viewport.width}px`;
+          textLayer.style.height = `${viewport.height}px`;
+          textLayer.style.filter = darkMode ? "invert(0.9) hue-rotate(180deg)" : "none";
+
+          const textContent = await page.getTextContent() as { items: { str: string }[] };
+          await pdfjsLib.renderTextLayer({
+            textContentSource: textContent,
+            container: textLayer,
+            viewport,
+            textDivs: []
+          }).promise;
+
+          if (highlightQuery.trim()) {
+            const spans = textLayer.querySelectorAll("span");
+            const query = highlightQuery.trim().toLowerCase();
+            spans.forEach((span) => {
+              const text = span.textContent || "";
+              if (text.toLowerCase().includes(query)) {
+                try {
+                  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
+                  span.innerHTML = text.replace(regex, `<mark>$1</mark>`);
+                } catch {}
+              }
+            });
+          }
+        } catch (err: unknown) {
+          if ((err as { name?: string }).name !== "RenderingCancelledException") {
+            console.error(`PDF rendering error page ${pageNum}:`, err);
+          }
         }
       }
-    } catch (err: any) {
-      if (err.name !== "RenderingCancelledException") {
-        console.error("PDF rendering error:", err);
-      }
+
+      if (!cancelled) setRendering(false);
     }
-  }, [pdfDoc, highlightQuery]);
 
+    renderAllPages();
+    return () => { cancelled = true; };
+  }, [pdfDoc, totalPages, scale, darkMode, highlightQuery]);
+
+  // IntersectionObserver for scroll-based page tracking
   useEffect(() => {
-    renderPage(pageNum, scale);
-  }, [pageNum, scale, renderPage]);
+    if (!pdfDoc || totalPages === 0) return;
 
-  const handlePrevPage = () => setPageNum(p => Math.max(p - 1, 1));
-  const handleNextPage = () => setPageNum(p => Math.min(p + 1, totalPages));
+    const pageElements: Element[] = [];
+    for (let i = 0; i < totalPages; i++) {
+      const el = scrollRef.current?.querySelector(`[data-page-index="${i}"]`);
+      if (el) pageElements.push(el);
+    }
+
+    if (pageElements.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let bestPage = lastPageRef.current;
+        let bestRatio = 0;
+        for (const entry of entries) {
+          const page = parseInt(entry.target.getAttribute("data-page-num") || "0");
+          if (entry.intersectionRatio > bestRatio) {
+            bestRatio = entry.intersectionRatio;
+            bestPage = page;
+          }
+        }
+        if (bestRatio > 0 && bestPage !== lastPageRef.current) {
+          lastPageRef.current = bestPage;
+          setCurrentPage(bestPage);
+        }
+      },
+      { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5] }
+    );
+
+    pageElements.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, [pdfDoc, totalPages, scale]);
 
   const handleZoomIn = () => setScale(s => Math.min(s + 0.25, 3.0));
   const handleZoomOut = () => setScale(s => Math.max(s - 0.25, 0.5));
@@ -314,6 +361,13 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
       containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(console.error);
     } else {
       document.exitFullscreen().then(() => setIsFullscreen(false)).catch(console.error);
+    }
+  };
+
+  const scrollToPage = (page: number) => {
+    const el = scrollRef.current?.querySelector(`[data-page-index="${page - 1}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
@@ -328,18 +382,14 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
     for (let i = 1; i <= totalPages; i++) {
       const page = await pdfDoc.getPage(i);
       const textContent = await page.getTextContent();
-      const strings = textContent.items.map((item: any) => item.str).join(" ");
+      const strings = textContent.items.map((item: { str: string }) => item.str).join(" ");
       if (strings.toLowerCase().includes(term.toLowerCase())) {
         results.push({ page: i, text: strings });
       }
     }
     setSearchResults(results);
     if (results.length > 0) {
-      if (pageNum === results[0].page) {
-        renderPage(pageNum, scale);
-      } else {
-        setPageNum(results[0].page);
-      }
+      scrollToPage(results[0].page);
     } else {
       toast.error("No matches found");
     }
@@ -357,34 +407,18 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="relative w-full h-full flex flex-col bg-[#111215] text-[#F5F5F0] border border-white/5 rounded overflow-hidden"
     >
       {/* Top Toolbar */}
       <div className="h-12 flex items-center justify-between px-4 bg-black/40 border-b border-white/5 relative z-20">
-        {/* Navigation */}
         <div className="flex items-center gap-2">
-          <button 
-            onClick={handlePrevPage} 
-            disabled={pageNum <= 1}
-            className="p-1 hover:bg-white/5 rounded disabled:opacity-30 cursor-pointer"
-          >
-            <ChevronLeft size={16} />
-          </button>
           <span className="text-xs font-mono">
-            Page {pageNum} of {totalPages}
+            Page {currentPage} of {totalPages}
           </span>
-          <button 
-            onClick={handleNextPage} 
-            disabled={pageNum >= totalPages}
-            className="p-1 hover:bg-white/5 rounded disabled:opacity-30 cursor-pointer"
-          >
-            <ChevronRight size={16} />
-          </button>
         </div>
 
-        {/* View adjustments */}
         <div className="flex items-center gap-3">
           <button onClick={handleZoomOut} disabled={scale <= 0.5} className="p-1 hover:text-[#E41613] disabled:opacity-30 cursor-pointer">
             <ZoomOut size={16} />
@@ -394,17 +428,17 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
             <ZoomIn size={16} />
           </button>
           <div className="w-px h-4 bg-white/10" />
-          
-          <button 
-            onClick={() => setDarkMode(!darkMode)} 
+
+          <button
+            onClick={() => setDarkMode(!darkMode)}
             className="p-1 hover:text-[#E41613] cursor-pointer"
             title="Toggle Dark Mode"
           >
             {darkMode ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-          
-          <button 
-            onClick={() => setSearchOpen(!searchOpen)} 
+
+          <button
+            onClick={() => setSearchOpen(!searchOpen)}
             className={`p-1 hover:text-[#E41613] cursor-pointer ${searchOpen ? "text-[#E41613]" : ""}`}
             title="Search inside PDF"
           >
@@ -421,8 +455,8 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
       {searchOpen && (
         <div className="absolute top-14 left-4 z-30 bg-black/80 backdrop-blur-md p-3 border border-white/10 rounded w-64 shadow-2xl">
           <form onSubmit={handleSearch} className="flex gap-2">
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search text..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -437,7 +471,7 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
               {searchResults.map((r, idx) => (
                 <button
                   key={idx}
-                  onClick={() => setPageNum(r.page)}
+                  onClick={() => scrollToPage(r.page)}
                   className="w-full text-left p-1 hover:bg-white/5 hover:text-white rounded"
                 >
                   Page {r.page} - Match found
@@ -448,25 +482,40 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
         </div>
       )}
 
-      {/* Canvas container */}
-      <div className="flex-1 overflow-auto p-6 flex justify-center bg-black/10 custom-scrollbar">
-        <div className="my-auto relative shadow-2xl bg-white select-text">
-          <canvas 
-            ref={canvasRef} 
-            className="block"
-            style={{
-              filter: darkMode ? "invert(0.9) hue-rotate(180deg)" : "none",
-              transition: "filter 0.3s ease"
-            }}
-          />
-          <div 
-            ref={textLayerRef} 
-            className="textLayer" 
-            style={{
-              filter: darkMode ? "invert(0.9) hue-rotate(180deg)" : "none",
-              transition: "filter 0.3s ease"
-            }}
-          />
+      {/* Continuous scroll pages */}
+      <div ref={scrollRef} className="flex-1 overflow-auto p-6 flex flex-col items-center bg-black/10 custom-scrollbar">
+        <div className="w-full max-w-[900px] flex flex-col items-center gap-6">
+          {Array.from({ length: totalPages }, (_, i) => (
+            <div
+              key={i}
+              data-page-index={i}
+              data-page-num={i + 1}
+              className="relative shadow-2xl bg-white select-text w-full"
+            >
+              <canvas
+                ref={el => { pageRefs.current[i].canvas = el; }}
+                className="block w-full"
+                style={{
+                  filter: darkMode ? "invert(0.9) hue-rotate(180deg)" : "none",
+                  transition: "filter 0.3s ease"
+                }}
+              />
+              <div
+                ref={el => { pageRefs.current[i].text = el; }}
+                className="textLayer absolute inset-0"
+                style={{
+                  filter: darkMode ? "invert(0.9) hue-rotate(180deg)" : "none",
+                  transition: "filter 0.3s ease"
+                }}
+              />
+            </div>
+          ))}
+          {rendering && (
+            <div className="flex items-center gap-2 py-4 text-xs text-white/30">
+              <Loader2 size={14} className="animate-spin" />
+              Rendering pages...
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -479,7 +528,7 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
 function VideoViewer({ fileBytes, ext }: { fileBytes: Uint8Array; ext: string }) {
   const objectUrl = React.useMemo(() => {
     const mime = `video/${ext === "mov" ? "mp4" : ext}`;
-    const blob = new Blob([fileBytes as any], { type: mime });
+    const blob = new Blob([fileBytes as unknown as BlobPart], { type: mime });
     return URL.createObjectURL(blob);
   }, [fileBytes, ext]);
 
@@ -489,7 +538,6 @@ function VideoViewer({ fileBytes, ext }: { fileBytes: Uint8Array; ext: string })
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-[#0D0E10] border border-white/5 rounded overflow-hidden">
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video 
         src={objectUrl} 
         controls 
@@ -504,16 +552,11 @@ function VideoViewer({ fileBytes, ext }: { fileBytes: Uint8Array; ext: string })
 // 4. Text / Code Viewer Component (Prism syntax coloring & Line numbers)
 // ─────────────────────────────────────────────────────────────────────────────
 function TextViewer({ fileBytes, ext }: { fileBytes: Uint8Array; ext: string }) {
-  const [textContent, setTextContent] = useState("");
   const [prismLoaded, setPrismLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchIndex, setSearchIndex] = useState(-1);
-  const codeRef = useRef<HTMLElement>(null);
+  const textContent = React.useMemo(() => new TextDecoder().decode(fileBytes), [fileBytes]);
 
-  useEffect(() => {
-    const text = new TextDecoder().decode(fileBytes);
-    setTextContent(text);
-  }, [fileBytes]);
+  const codeRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     async function loadPrism() {
@@ -546,7 +589,7 @@ function TextViewer({ fileBytes, ext }: { fileBytes: Uint8Array; ext: string }) 
 
   useEffect(() => {
     if (prismLoaded && codeRef.current && textContent) {
-      const Prism = (window as any).Prism;
+      const Prism = (window as unknown as { Prism?: { highlightElement: (el: HTMLElement) => void } }).Prism;
       if (Prism) {
         Prism.highlightElement(codeRef.current);
       }
