@@ -361,7 +361,7 @@ export async function apiDownloadDocument(
   token: string,
   documentId: string
 ): Promise<Uint8Array> {
-  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}`, {
+  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/download`, {
     method: "GET",
     headers: authHeaders(token),
   });
