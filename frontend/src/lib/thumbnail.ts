@@ -18,7 +18,7 @@ function openDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
@@ -153,7 +153,7 @@ export async function generateThumbnail(
 function generateImageThumbnail(bytes: Uint8Array, ext: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const mime = `image/${ext === "jpg" ? "jpeg" : ext}`;
-    const blob = new Blob([bytes as any], { type: mime });
+    const blob = new Blob([bytes as unknown as BlobPart], { type: mime });
     const url = URL.createObjectURL(blob);
     const img = new Image();
 
@@ -203,7 +203,7 @@ function generateImageThumbnail(bytes: Uint8Array, ext: string): Promise<string>
 function generateVideoThumbnail(bytes: Uint8Array, ext: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const mime = `video/${ext === "mov" ? "mp4" : ext}`;
-    const blob = new Blob([bytes as any], { type: mime });
+    const blob = new Blob([bytes as unknown as BlobPart], { type: mime });
     const url = URL.createObjectURL(blob);
     const video = document.createElement("video");
 
@@ -262,7 +262,7 @@ function generateVideoThumbnail(bytes: Uint8Array, ext: string): Promise<string>
 async function generatePDFThumbnail(bytes: Uint8Array): Promise<string> {
   // Load pdf.js CDN
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
-  const pdfjsLib = (window as any)["pdfjs-dist/build/pdf"];
+  const pdfjsLib = (window as unknown as Record<string, unknown>)["pdfjs-dist/build/pdf"] as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (params: { data: Uint8Array }) => { promise: Promise<{ getPage: (n: number) => Promise<{ getViewport: (params: { scale: number }) => { width: number; height: number }; render: (params: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<void> } }>; numPages: number }> } };
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
