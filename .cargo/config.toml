@@ -1,0 +1,10 @@
+# Enable incremental compilation for faster debug builds
+[build]
+incremental = true
+
+[profile.dev]
+# Maximize compile speed for development
+opt-level = 0
+debug = true
+lto = "off"
+codegen-units = 256
