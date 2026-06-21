@@ -27,4 +27,5 @@ pub struct ShareLinkResponse {
     pub downloads_count: i32,
     pub created_at: Option<DateTime<Utc>>,
     pub owner_encrypted_link_key: Option<String>,
+    pub permission: String,
 }
