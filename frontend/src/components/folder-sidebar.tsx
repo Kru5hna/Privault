@@ -325,8 +325,8 @@ export function FolderSidebar({
         {/* Header */}
         <div className="h-16 flex items-center justify-between px-4 pl-14 border-b border-[#1E2026]">
           <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 bg-[#E41613] animate-pulse rounded-full" />
-            <span className="text-sm font-semibold tracking-wider text-white">PRIVAULT NAVIGATOR</span>
+            <span className="font-serif text-lg font-bold tracking-[0.25em] text-white">PRIVAULT</span>
+            <span className="h-2 w-2 rounded-full bg-[#E41613] animate-pulse"></span>
           </div>
         </div>
 
@@ -338,14 +338,14 @@ export function FolderSidebar({
               setViewMode("vault");
               handleFolderClick(null);
             }}
-            className={`flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold tracking-wide border-l-2 text-left transition-all ${
+            className={`flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold tracking-wide text-left transition-all border ${
               viewMode === "vault" && currentFolderId === null
                 ? "bg-[#1E2026] text-white border-[#E41613]"
-                : "text-[#8E929F] border-transparent hover:bg-[#16171C] hover:text-white"
+                : "text-[#8E929F] border-white/10 bg-[#16171C]/40 hover:bg-[#1C1D22] hover:text-white hover:border-white/30"
             }`}
           >
             <HardDrive size={15} />
-            <span>SECURE VAULT (ROOT)</span>
+            <span>ROOT FOLDER</span>
           </button>
 
           {/* Shared Links View */}
