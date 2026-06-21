@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/app/context";
 import {
   apiListDocuments,
@@ -14,6 +14,8 @@ import {
   apiListDocumentTags,
   apiListAllFolders,
   apiDeleteFolderDocuments,
+  apiCreateTag,
+  apiTagDocument,
   DocumentMetadata,
   FolderMetadata,
   TagMetadata,
@@ -26,6 +28,10 @@ import { FilePreviewModal } from "@/components/file-preview-modal";
 import { FolderSidebar } from "@/components/folder-sidebar";
 import { ShareModal } from "@/components/share-modal";
 import { SharedLinksPanel } from "@/components/shared-links-panel";
+import { TrashPanel } from "@/components/trash-panel";
+import { ActivityLogPanel } from "@/components/activity-log-panel";
+import { RecoveryPhraseModal } from "@/components/recovery-phrase-modal";
+import { logActivity } from "@/lib/activity";
 import { Menu, Share2, X, Lock, CheckCircle2, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,8 +70,14 @@ export default function DashboardPage() {
   const [folderPath, setFolderPath] = useState<{id: string | null, name: string}[]>([{id: null, name: "Root"}]);
   const [selectedDoc, setSelectedDoc] = useState<DocumentMetadata | null>(null);
   const [shareDoc, setShareDoc] = useState<DocumentMetadata | null>(null);
-  const [viewMode, setViewMode] = useState<"vault" | "shares">("vault");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"vault" | "shares" | "trash" | "activity">("vault");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, []);
 
   const [allTags, setAllTags] = useState<TagMetadata[]>([]);
   const [docTagsCache, setDocTagsCache] = useState<Record<string, TagMetadata[]>>({});
@@ -84,6 +96,16 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryMnemonic, setRecoveryMnemonic] = useState("");
+  const [trashTagId, setTrashTagId] = useState<string | null>(null);
+  const [duplicateFilePrompt, setDuplicateFilePrompt] = useState<{
+    fileName: string;
+    existingId: string;
+    onResolve: (action: "overwrite" | "keep-both" | "skip") => void;
+  } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -92,79 +114,108 @@ export default function DashboardPage() {
   }, [user, authLoading, logout]);
 
   // Load documents and folders
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!user || !privateKey) return;
     const currentUser = user;
     const currentKey = privateKey;
 
-    async function loadData() {
-      setLoadingDocs(true);
-      try {
-        const [docs, fldrs, tags] = await Promise.all([
-          apiListDocuments(currentUser.sessionToken, currentFolderId),
-          apiListAllFolders(currentUser.sessionToken),
-          apiListTags(currentUser.sessionToken)
-        ]);
-        setDocuments(docs);
-        setAllFolders(fldrs);
-        setAllTags(tags);
-        setIsSandbox(false);
-        
-        // Fetch tags for all docs in view concurrently
-        const docTagsObj: Record<string, TagMetadata[]> = {};
-        await Promise.all(
-          docs.map(async (d) => {
-            try {
-              const dt = await apiListDocumentTags(currentUser.sessionToken, d.id);
-              docTagsObj[d.id] = dt;
-            } catch {
-              docTagsObj[d.id] = [];
-            }
-          })
-        );
-        setDocTagsCache(docTagsObj);
-        
-      } catch (err) {
-        console.warn("Backend documents API failed or not yet implemented. Falling back to local memory sandbox.", err);
-        setIsSandbox(true);
-        // Setup local encrypted demo files in memory using the user's private/public key
-        if (currentFolderId === null) {
-            try {
-              const pubKey = await getPublicKeyFromPrivateKey(currentKey);
-              const encoder = new TextEncoder();
-              const preparedDemos = await Promise.all(
-                DEMO_DOCUMENTS.map(async (doc) => {
-                  const { ciphertext, encryptedDek } = await encryptFile(
-                    encoder.encode(doc.content),
-                    pubKey
-                  );
-                  return {
-                    id: doc.id,
-                    owner_id: doc.owner_id,
-                    name: doc.name,
-                    size: doc.size,
-                    folder_id: null,
-                    created_at: doc.created_at,
-                    updated_at: doc.updated_at,
-                    encrypted_dek: encryptedDek,
-                    ciphertext, // Cached locally
-                  };
-                })
-              );
-              setDemoDocs(preparedDemos);
-            } catch (cryptoErr) {
-              console.error("Failed to prepare memory sandbox keys", cryptoErr);
-            }
-        } else {
-            setDemoDocs([]);
+    setLoadingDocs(true);
+    try {
+      const [docs, fldrs, tags] = await Promise.all([
+        apiListDocuments(currentUser.sessionToken, currentFolderId),
+        apiListAllFolders(currentUser.sessionToken),
+        apiListTags(currentUser.sessionToken)
+      ]);
+      setDocuments(docs);
+      setAllFolders(fldrs);
+      setAllTags(tags);
+      setIsSandbox(false);
+
+      // Check for / create the TRASH tag silently
+      let trashTag = tags.find(t => t.name.toLowerCase() === "trash");
+      if (!trashTag && !isSandbox) {
+        try {
+          trashTag = await apiCreateTag(currentUser.sessionToken, "TRASH", "#E41613");
+          tags.push(trashTag);
+          setAllTags([...tags]);
+        } catch (e) {
+          console.error("Failed to create default trash tag:", e);
         }
-      } finally {
-        setLoadingDocs(false);
+      }
+      if (trashTag) {
+        setTrashTagId(trashTag.id);
+      }
+      
+      // Fetch tags for all docs in view concurrently
+      const docTagsObj: Record<string, TagMetadata[]> = {};
+      await Promise.all(
+        docs.map(async (d) => {
+          try {
+            const dt = await apiListDocumentTags(currentUser.sessionToken, d.id);
+            docTagsObj[d.id] = dt;
+          } catch {
+            docTagsObj[d.id] = [];
+          }
+        })
+      );
+      setDocTagsCache(docTagsObj);
+      
+    } catch (err) {
+      console.warn("Backend documents API failed or not yet implemented. Falling back to local memory sandbox.", err);
+      setIsSandbox(true);
+      // Setup local encrypted demo files in memory using the user's private/public key
+      if (currentFolderId === null) {
+          try {
+            const pubKey = await getPublicKeyFromPrivateKey(currentKey);
+            const encoder = new TextEncoder();
+            const preparedDemos = await Promise.all(
+              DEMO_DOCUMENTS.map(async (doc) => {
+                const { ciphertext, encryptedDek } = await encryptFile(
+                  encoder.encode(doc.content),
+                  pubKey
+                );
+                return {
+                  id: doc.id,
+                  owner_id: doc.owner_id,
+                  name: doc.name,
+                  size: doc.size,
+                  folder_id: null,
+                  created_at: doc.created_at,
+                  updated_at: doc.updated_at,
+                  encrypted_dek: encryptedDek,
+                  ciphertext, // Cached locally
+                };
+              })
+            );
+            setDemoDocs(preparedDemos);
+          } catch (cryptoErr) {
+            console.error("Failed to prepare memory sandbox keys", cryptoErr);
+          }
+      } else {
+          setDemoDocs([]);
+      }
+    } finally {
+      setLoadingDocs(false);
+    }
+  }, [user, privateKey, currentFolderId, isSandbox]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Check for recovery phrase onboarding on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const showRecovery = sessionStorage.getItem("privault_show_recovery");
+      const mnemonic = sessionStorage.getItem("privault_mnemonic_temp");
+      if (showRecovery === "true" && mnemonic) {
+        setRecoveryMnemonic(mnemonic);
+        setShowRecoveryModal(true);
+        sessionStorage.removeItem("privault_show_recovery");
+        sessionStorage.removeItem("privault_mnemonic_temp");
       }
     }
-
-    loadData();
-  }, [user, privateKey, currentFolderId]);
+  }, []);
 
   if (authLoading || !user || !privateKey) {
     return (
@@ -180,8 +231,101 @@ export default function DashboardPage() {
     );
   }
 
-  // Handle file encryption and upload for multiple files
-  const handleMultipleFilesUpload = async (files: FileList | File[]) => {
+  // Resolve/create folder path recursively and return the deepest folder ID
+  const getOrCreateFoldersInPath = async (relativePath: string, rootFolderId: string | null): Promise<string | null> => {
+    const parts = relativePath.split("/");
+    const dirParts = parts.slice(0, parts.length - 1);
+    
+    let currentParentId = rootFolderId;
+    
+    for (const dirName of dirParts) {
+      if (!dirName) continue;
+      
+      const existing = allFolders.find(f => f.name === dirName && f.parent_id === currentParentId);
+      if (existing) {
+        currentParentId = existing.id;
+      } else {
+        if (isSandbox) {
+          const newFolderId = `sandbox-folder-${Date.now()}-${Math.random()}`;
+          const newFolder: FolderMetadata = {
+            id: newFolderId,
+            owner_id: user?.userId || "demo-user",
+            parent_id: currentParentId,
+            name: dirName,
+            created_at: new Date().toISOString()
+          };
+          allFolders.push(newFolder);
+          setAllFolders([...allFolders]);
+          currentParentId = newFolderId;
+        } else if (user) {
+          try {
+            const folder = await apiCreateFolder(user.sessionToken, dirName, currentParentId);
+            allFolders.push(folder);
+            setAllFolders([...allFolders]);
+            currentParentId = folder.id;
+          } catch (err) {
+            console.error(`Failed to create folder ${dirName}:`, err);
+            throw err;
+          }
+        }
+      }
+    }
+    
+    return currentParentId;
+  };
+
+  // Promise-based duplicate filename resolver dialog
+  const resolveDuplicate = (fileName: string, existingId: string): Promise<"overwrite" | "keep-both" | "skip"> => {
+    return new Promise((resolve) => {
+      setDuplicateFilePrompt({
+        fileName,
+        existingId,
+        onResolve: (action) => {
+          setDuplicateFilePrompt(null);
+          resolve(action);
+        }
+      });
+    });
+  };
+
+  // Recursive Directory Traversal
+  const traverseDirectory = async (entry: any, pathStr = ""): Promise<{ file: File; relativePath: string }[]> => {
+    const filesList: { file: File; relativePath: string }[] = [];
+    
+    const traverse = async (item: any, currentPath: string) => {
+      if (item.isFile) {
+        const file = await new Promise<File>((resolve, reject) => {
+          item.file(resolve, reject);
+        });
+        filesList.push({ file, relativePath: currentPath + file.name });
+      } else if (item.isDirectory) {
+        const dirReader = item.createReader();
+        const entries = await new Promise<any[]>((resolve, reject) => {
+          const readAll = () => {
+            dirReader.readEntries((results: any[]) => {
+              if (results.length === 0) {
+                resolve(entriesList);
+              } else {
+                entriesList.push(...results);
+                readAll();
+              }
+            }, reject);
+          };
+          const entriesList: any[] = [];
+          readAll();
+        });
+        for (const entryItem of entries) {
+          await traverse(entryItem, currentPath + item.name + "/");
+        }
+      }
+    };
+    
+    await traverse(entry, pathStr);
+    return filesList;
+  };
+
+  // Main Upload Queue processor
+  const handleUploadQueue = async (uploadQueue: { file: File; relativePath: string }[]) => {
     if (!user || !privateKey) return;
     const currentUser = user;
     const currentKey = privateKey;
@@ -190,101 +334,114 @@ export default function DashboardPage() {
 
     // Initialize batchUploads state
     const initialUploads: Record<string, { name: string; size: number; state: "encrypting" | "uploading" | "complete" | "failed"; error?: string }> = {};
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      initialUploads[file.name] = {
-        name: file.name,
-        size: file.size,
+    uploadQueue.forEach(item => {
+      initialUploads[item.relativePath] = {
+        name: item.file.name,
+        size: item.file.size,
         state: "encrypting",
       };
-    }
+    });
     setBatchUploads(initialUploads);
-    setUploadState("uploading");
+    setUploadState("encrypting");
 
     try {
-      // 1. Generate RSA public key from private key once for the batch
       const rsaPublicKey = await getPublicKeyFromPrivateKey(currentKey);
 
-      // Define a single file upload worker
-      const uploadWorker = async (file: File) => {
+      const uploadWorker = async (item: { file: File; relativePath: string }) => {
+        const { file, relativePath } = item;
         try {
-          console.log(`[Upload Worker] Starting encryption for: ${file.name} (size: ${file.size} bytes)`);
-          
-          // Read file bytes
-          const fileBytes = new Uint8Array(await file.arrayBuffer());
+          // 1. Resolve folder hierarchy
+          const targetFolderId = await getOrCreateFoldersInPath(relativePath, currentFolderId);
 
-          // Encrypt file using Web Crypto
+          // 2. Check for duplicates
+          const existingDocs = isSandbox ? demoDocs : documents;
+          const duplicate = existingDocs.find(d => d.name === file.name && d.folder_id === targetFolderId);
+          
+          let uploadName = file.name;
+          let shouldOverwrite = false;
+
+          if (duplicate) {
+            const resolution = await resolveDuplicate(file.name, duplicate.id);
+            if (resolution === "skip") {
+              setBatchUploads(prev => {
+                const next = { ...prev };
+                delete next[relativePath];
+                return next;
+              });
+              return;
+            } else if (resolution === "keep-both") {
+              const extIdx = file.name.lastIndexOf(".");
+              const base = extIdx === -1 ? file.name : file.name.slice(0, extIdx);
+              const ext = extIdx === -1 ? "" : file.name.slice(extIdx);
+              uploadName = `${base} (${Date.now().toString().slice(-4)})${ext}`;
+            } else if (resolution === "overwrite") {
+              shouldOverwrite = true;
+            }
+          }
+
+          // 3. Encrypt file bytes
+          const fileBytes = new Uint8Array(await file.arrayBuffer());
           const { ciphertext, encryptedDek } = await encryptFile(fileBytes, rsaPublicKey);
 
-          // Update state for this file to uploading
+          // 4. Update status to uploading
           setBatchUploads(prev => ({
             ...prev,
-            [file.name]: { ...prev[file.name], state: "uploading" }
+            [relativePath]: { ...prev[relativePath], name: uploadName, state: "uploading" }
           }));
 
-          console.log(`[Upload Worker] Encryption complete for: ${file.name}. Staging upload...`, {
-            name: file.name,
-            size: file.size,
-            encryptedDekLength: encryptedDek.length,
-            ciphertextLength: ciphertext.length,
-          });
-
           if (isSandbox) {
-            // Mock save to sandbox state
+            if (shouldOverwrite && duplicate) {
+              setDemoDocs(prev => prev.filter(d => d.id !== duplicate.id));
+            }
             const newDoc: SandboxDocument = {
               id: `sandbox-doc-${Date.now()}-${Math.random()}`,
               owner_id: currentUser.userId,
-              name: file.name,
+              name: uploadName,
               size: file.size,
-              folder_id: null,
+              folder_id: targetFolderId,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               encrypted_dek: encryptedDek,
               ciphertext,
             };
-            setDemoDocs((prev) => [newDoc, ...prev]);
+            setDemoDocs(prev => [newDoc, ...prev]);
           } else {
-            // Send encrypted payload to backend
+            if (shouldOverwrite && duplicate) {
+              await apiDeleteDocument(currentUser.sessionToken, duplicate.id);
+            }
             const blob = new Blob([ciphertext as unknown as BlobPart], { type: "application/octet-stream" });
-            await apiUploadDocument(currentUser.sessionToken, blob, file.name, encryptedDek, currentFolderId);
+            await apiUploadDocument(currentUser.sessionToken, blob, uploadName, encryptedDek, targetFolderId);
           }
 
           // Mark complete
           setBatchUploads(prev => ({
             ...prev,
-            [file.name]: { ...prev[file.name], state: "complete" }
+            [relativePath]: { ...prev[relativePath], state: "complete" }
           }));
-          console.log(`[Upload Worker] Successfully uploaded: ${file.name}`);
+
+          // Log Activity: Upload
+          logActivity(currentUser.userId, "Upload", `Uploaded encrypted file: ${uploadName}`);
 
         } catch (err: unknown) {
           const errorObject = err as Error;
-          const errorMsg = errorObject?.message || "Encryption or upload failed";
-          console.error(`[Upload Worker] Error for ${file.name}:`, errorMsg, err);
-          
-          // Mark failed
+          const errorMsg = errorObject?.message || "Upload failed";
           setBatchUploads(prev => ({
             ...prev,
-            [file.name]: { ...prev[file.name], state: "failed", error: errorMsg }
+            [relativePath]: { ...prev[relativePath], state: "failed", error: errorMsg }
           }));
           throw err;
         }
       };
 
-      // Run parallel uploads using Promise.allSettled
-      const uploadPromises = Array.from(files).map(file => uploadWorker(file));
-      const results = await Promise.allSettled(uploadPromises);
-
-      // Verify if there were any failures
-      const failedCount = results.filter(r => r.status === "rejected").length;
-      if (failedCount > 0) {
-        setUploadError(`Batch completed with ${failedCount} failure(s). See progress panel.`);
-        setUploadState("idle");
-      } else {
-        setUploadState("complete");
-        setTimeout(() => {
-          setUploadState("idle");
-        }, 2000);
+      // Execute sequentially to prevent race conditions during recursive folder creation
+      for (const item of uploadQueue) {
+        await uploadWorker(item).catch(err => console.error("Worker upload failure", err));
       }
+
+      setUploadState("complete");
+      setTimeout(() => {
+        setUploadState("idle");
+      }, 2000);
 
     } catch (err: unknown) {
       console.error("Batch upload outer failure:", err);
@@ -292,7 +449,7 @@ export default function DashboardPage() {
       setUploadError(errorObject?.message || "Failed to process batch upload.");
       setUploadState("idle");
     } finally {
-      // ALWAYS refresh documents list at the end of the batch
+      // Refresh documents list
       if (!isSandbox) {
         try {
           const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
@@ -301,6 +458,24 @@ export default function DashboardPage() {
           console.error("Failed to refresh documents list:", refreshErr);
         }
       }
+    }
+  };
+
+  const handleMultipleFilesUpload = async (files: FileList | File[]) => {
+    const queue = Array.from(files).map(file => ({
+      file,
+      relativePath: file.name
+    }));
+    await handleUploadQueue(queue);
+  };
+
+  const onFolderSelectChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const queue = Array.from(e.target.files).map(file => ({
+        file,
+        relativePath: file.webkitRelativePath || file.name
+      }));
+      await handleUploadQueue(queue);
     }
   };
 
@@ -478,24 +653,48 @@ export default function DashboardPage() {
     if (!user) return;
     const currentUser = user;
     
-    toast.error("Permanently delete this document?", {
+    toast.error("Move document to Recycle Bin?", {
        icon: null,
        action: {
-         label: 'Confirm Delete',
+         label: 'Move to Trash',
          onClick: async () => {
            try {
+             const docName = (isSandbox ? demoDocs : documents).find(d => d.id === id)?.name || "Unknown Document";
              if (isSandbox) {
-               setDemoDocs((prev) => prev.filter((d) => d.id !== id));
+               const trashTag: TagMetadata = {
+                 id: "sandbox-trash-tag",
+                 owner_id: currentUser.userId,
+                 name: "TRASH",
+                 color: "#E41613",
+                 created_at: new Date().toISOString()
+               };
+               setDocTagsCache(prev => ({
+                 ...prev,
+                 [id]: [...(prev[id] || []), trashTag]
+               }));
+               toast.success("Document moved to Recycle Bin (Sandbox)");
              } else {
-               await apiDeleteDocument(currentUser.sessionToken, id);
+               if (!trashTagId) {
+                 toast.error("Recycle bin not initialized yet");
+                 return;
+               }
+               await apiTagDocument(currentUser.sessionToken, id, trashTagId);
                // Refresh docs
                const docs = await apiListDocuments(currentUser.sessionToken, currentFolderId);
                setDocuments(docs);
-               toast.success("Document deleted securely");
+               // Fetch tag status for this doc
+               try {
+                 const dt = await apiListDocumentTags(currentUser.sessionToken, id);
+                 setDocTagsCache(prev => ({ ...prev, [id]: dt }));
+               } catch (e) {
+                 console.error("Failed to update doc tags cache:", e);
+               }
+               toast.success("Document moved to Recycle Bin");
              }
+             logActivity(currentUser.userId, "Delete", `Moved document to Recycle Bin: ${docName}`);
            } catch (err: unknown) {
              const errorObject = err as Error;
-             toast.error(`Delete failed: ${errorObject?.message || "Unknown error"}`);
+             toast.error(`Failed to delete: ${errorObject?.message || "Unknown error"}`);
            }
          }
        },
@@ -507,8 +706,11 @@ export default function DashboardPage() {
     });
   };
 
-  // Filter documents by search query and tags
+  // Filter documents by search query and tags, excluding trashed documents
   const displayedDocs = (isSandbox ? demoDocs : documents).filter((doc) => {
+    const isTrashed = docTagsCache[doc.id]?.some((t: TagMetadata) => t.name.toLowerCase() === "trash");
+    if (isTrashed) return false;
+
     const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
     if (selectedTagFilter) {
        const hasTag = docTagsCache[doc.id]?.some((t: TagMetadata) => t.id === selectedTagFilter);
@@ -538,6 +740,15 @@ export default function DashboardPage() {
     <div className="flex min-h-screen bg-[#0D0E10] text-[#F5F5F0] dotted-grid-dark relative overflow-x-hidden w-full">
       <div className="noise-overlay absolute inset-0 pointer-events-none opacity-20" />
 
+      {/* Sidebar Toggler Button (Fixed) */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="fixed top-[18px] left-[18px] z-50 p-1.5 text-[#8E929F] hover:text-white rounded hover:bg-white/5 cursor-pointer transition-all duration-300"
+        title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+      >
+        {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
+
       {/* Collapsible Sidebar */}
       <FolderSidebar
         folders={allFolders}
@@ -562,13 +773,7 @@ export default function DashboardPage() {
         {/* Header Panel */}
         <header className="sticky top-0 z-30 border-b border-white/5 bg-[#15161A]/80 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-5xl flex-col items-start justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-1.5 -ml-1.5 text-[#8E929F] hover:text-white rounded hover:bg-white/5 cursor-pointer"
-              >
-                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
+            <div className={`flex items-center gap-3 transition-[padding] duration-300 ${sidebarOpen ? "pl-0" : "pl-12"}`}>
               <span className="font-serif text-xl font-bold tracking-[0.25em] text-[#F5F5F0]">
                 PRIVAULT
               </span>
@@ -604,7 +809,7 @@ export default function DashboardPage() {
         </header>
 
         {/* Dynamic view modes */}
-        {viewMode === "vault" ? (
+        {viewMode === "vault" && (
           <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
             <div className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
               <div>
@@ -676,6 +881,13 @@ export default function DashboardPage() {
                 multiple
                 className="hidden"
               />
+              <input
+                ref={folderInputRef}
+                type="file"
+                onChange={onFolderSelectChange}
+                {...({ webkitdirectory: "", directory: "" } as any)}
+                className="hidden"
+              />
               
               {uploadState === "encrypting" && (
                 <div className="flex flex-col items-center justify-center gap-3 text-center">
@@ -716,11 +928,21 @@ export default function DashboardPage() {
               )}
 
               {uploadState === "idle" && (
-                <div className="text-center p-6">
+                <div className="text-center p-6 flex flex-col items-center justify-center gap-2">
                   <p className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60 group-hover:text-white transition-colors duration-300">
-                    Drag files here or click to browse
+                    Drag files/folders here, click to browse files, or{" "}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        folderInputRef.current?.click();
+                      }}
+                      className="underline text-[#E41613] hover:text-white cursor-pointer font-bold"
+                    >
+                      upload a folder
+                    </button>
                   </p>
-                  <p className="mt-2 text-xs text-white/30 tracking-wide">
+                  <p className="text-xs text-white/30 tracking-wide">
                     Files are AES-256-GCM encrypted in the browser before leaving your machine
                   </p>
                 </div>
@@ -781,13 +1003,13 @@ export default function DashboardPage() {
                   No secure documents found in this vault
                 </div>
               ) : (
-                <div>
+                <div className="overflow-x-auto">
                   <table className="doc-table w-full text-left text-sm border-collapse">
                     <thead className="hidden sm:table-header-group">
                       <tr className="border-b border-white/5 text-micro font-semibold text-white/40 tracking-[0.2em]">
                         <th className="pb-4 pr-4 font-bold">Name</th>
-                        <th className="pb-4 pr-4 font-bold">Size</th>
-                        <th className="pb-4 pr-4 font-bold">Seal Date</th>
+                        <th className="pb-4 pr-4 font-bold whitespace-nowrap">Size</th>
+                        <th className="pb-4 pr-4 font-bold whitespace-nowrap">Seal Date</th>
                         <th className="pb-4 text-right font-bold w-[380px]">Actions</th>
                       </tr>
                     </thead>
@@ -828,10 +1050,10 @@ export default function DashboardPage() {
                               </div>
                             </div>
                           </td>
-                          <td data-label="Size" className="py-4 pr-4 text-xs text-white/40 font-mono">
+                          <td data-label="Size" className="py-4 pr-4 text-xs text-white/40 font-mono whitespace-nowrap">
                             {formatSize(doc.size)}
                           </td>
-                          <td data-label="Seal Date" className="py-4 pr-4 text-xs text-white/40">
+                          <td data-label="Seal Date" className="py-4 pr-4 text-xs text-white/40 whitespace-nowrap">
                             {formatDate(doc.created_at)}
                           </td>
                           <td data-label="Actions" className="py-4 sm:text-right w-full sm:whitespace-nowrap sm:w-[380px]">
@@ -884,9 +1106,31 @@ export default function DashboardPage() {
               )}
             </section>
           </main>
-        ) : (
+        )}
+
+        {viewMode === "shares" && (
           <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
             <SharedLinksPanel user={user} />
+          </main>
+        )}
+
+        {viewMode === "trash" && (
+          <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+            <TrashPanel
+              user={user}
+              documents={isSandbox ? demoDocs : documents}
+              docTagsCache={docTagsCache}
+              isSandbox={isSandbox}
+              onRefresh={loadData}
+              trashTagId={trashTagId}
+              setDemoDocs={setDemoDocs}
+            />
+          </main>
+        )}
+
+        {viewMode === "activity" && (
+          <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+            <ActivityLogPanel userId={user.userId} />
           </main>
         )}
       </div>
@@ -993,6 +1237,51 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Recovery Phrase Onboarding Modal */}
+      <RecoveryPhraseModal
+        isOpen={showRecoveryModal}
+        onClose={() => setShowRecoveryModal(false)}
+        mnemonic={recoveryMnemonic}
+        username={user?.username || ""}
+      />
+
+      {/* Duplicate File Resolution Modal */}
+      {duplicateFilePrompt && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/85 backdrop-blur-xs px-4">
+          <div className="w-full max-w-md bg-[#111215] border border-white/10 p-6 sm:p-8 rounded text-center">
+            <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
+              <AlertTriangle size={24} />
+            </div>
+            <h3 className="font-serif text-base font-bold text-white mb-2 uppercase tracking-wide">
+              Duplicate File Detected
+            </h3>
+            <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
+              A document named <span className="text-white font-mono">"{duplicateFilePrompt.fileName}"</span> already exists in this destination folder.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => duplicateFilePrompt.onResolve("keep-both")}
+                className="w-full py-2.5 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors hover:bg-white/10 cursor-pointer"
+              >
+                Keep Both (Rename copy)
+              </button>
+              <button
+                onClick={() => duplicateFilePrompt.onResolve("overwrite")}
+                className="w-full py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors hover:bg-[#c31310] cursor-pointer"
+              >
+                Overwrite Existing File
+              </button>
+              <button
+                onClick={() => duplicateFilePrompt.onResolve("skip")}
+                className="w-full py-2.5 bg-transparent text-white/50 text-xs font-bold uppercase tracking-wider rounded transition-colors hover:text-white cursor-pointer"
+              >
+                Skip File
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
