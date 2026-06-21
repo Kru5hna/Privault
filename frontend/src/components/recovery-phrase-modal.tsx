@@ -122,7 +122,7 @@ SAFETY INSTRUCTIONS:
         {/* Header */}
         <div className="mb-6 text-center">
           <div className="inline-flex items-center gap-2">
-            <span className="font-serif text-xl font-bold tracking-[0.25em] text-[#F5F5F0]">
+            <span className="font-serif text-2xl font-light tracking-wide text-[#F5F5F0]">
               SECURE RECOVERY PHRASE
             </span>
             <span className="h-2 w-2 rounded-full bg-[#E41613] animate-pulse"></span>
