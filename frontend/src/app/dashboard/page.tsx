@@ -32,7 +32,7 @@ import { TrashPanel } from "@/components/trash-panel";
 import { ActivityLogPanel } from "@/components/activity-log-panel";
 import { RecoveryPhraseModal } from "@/components/recovery-phrase-modal";
 import { logActivity } from "@/lib/activity";
-import { Menu, Share2, X, Lock, CheckCircle2, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
+import { Menu, Share2, X, Lock, CheckCircle2, AlertTriangle, ChevronUp, ChevronDown, Loader2, File, Settings, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
 interface SandboxDocument extends DocumentMetadata {
@@ -101,6 +101,26 @@ export default function DashboardPage() {
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [recoveryMnemonic, setRecoveryMnemonic] = useState("");
   const [trashTagId, setTrashTagId] = useState<string | null>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [notesText, setNotesText] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const storageKey = `privault_notes_${user.userId}_${currentFolderId || "root"}`;
+    const saved = localStorage.getItem(storageKey);
+    setNotesText(saved || "");
+  }, [currentFolderId, user]);
+
+  const handleNotesChange = (text: string) => {
+    if (!user) return;
+    setNotesText(text);
+    setNotesSaving(true);
+    const storageKey = `privault_notes_${user.userId}_${currentFolderId || "root"}`;
+    localStorage.setItem(storageKey, text);
+    setTimeout(() => setNotesSaving(false), 300);
+  };
+
   const [duplicateFilePrompt, setDuplicateFilePrompt] = useState<{
     fileName: string;
     existingId: string;
@@ -616,8 +636,9 @@ export default function DashboardPage() {
 
   // Handle delete all files in folder
   const handleDeleteAllFiles = () => {
-    if (!currentFolderId || !user) return;
+    if (!user) return;
     const count = documents.length;
+    if (count === 0) return;
 
     toast.error(`Delete ${count} files from this folder?`, {
       description: "This will permanently delete all files in this folder from storage and database. This action cannot be undone.",
@@ -625,12 +646,20 @@ export default function DashboardPage() {
       action: {
         label: "Delete All",
         onClick: async () => {
+          setLoadingDocs(true);
           try {
             if (isSandbox) {
-              setDemoDocs([]);
+              setDemoDocs(prev => prev.filter(d => d.folder_id !== currentFolderId));
               toast.success(`Deleted ${count} files successfully (Sandbox)`);
             } else {
-              await apiDeleteFolderDocuments(user.sessionToken, currentFolderId);
+              if (currentFolderId === null) {
+                // Delete all root documents by calling delete API on each
+                await Promise.all(
+                  documents.map(d => apiDeleteDocument(user.sessionToken, d.id))
+                );
+              } else {
+                await apiDeleteFolderDocuments(user.sessionToken, currentFolderId);
+              }
               const docs = await apiListDocuments(user.sessionToken, currentFolderId);
               setDocuments(docs);
               toast.success(`Deleted ${count} files successfully`);
@@ -638,6 +667,8 @@ export default function DashboardPage() {
           } catch (err: any) {
             console.error(err);
             toast.error(err?.message || "Failed to delete all files");
+          } finally {
+            setLoadingDocs(false);
           }
         }
       },
@@ -658,6 +689,7 @@ export default function DashboardPage() {
        action: {
          label: 'Move to Trash',
          onClick: async () => {
+           setLoadingDocs(true);
            try {
              const docName = (isSandbox ? demoDocs : documents).find(d => d.id === id)?.name || "Unknown Document";
              if (isSandbox) {
@@ -695,6 +727,8 @@ export default function DashboardPage() {
            } catch (err: unknown) {
              const errorObject = err as Error;
              toast.error(`Failed to delete: ${errorObject?.message || "Unknown error"}`);
+           } finally {
+             setLoadingDocs(false);
            }
          }
        },
@@ -773,7 +807,7 @@ export default function DashboardPage() {
         {/* Header Panel */}
         <header className="sticky top-0 z-30 border-b border-white/5 bg-[#15161A]/80 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-5xl flex-col items-start justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
-            <div className={`flex items-center gap-3 transition-[padding] duration-300 ${sidebarOpen ? "pl-0" : "pl-12"}`}>
+            <div className={`flex items-center gap-3 transition-all duration-300 ${sidebarOpen ? "opacity-0 pointer-events-none w-0 overflow-hidden" : "pl-12 opacity-100"}`}>
               <span className="font-serif text-xl font-bold tracking-[0.25em] text-[#F5F5F0]">
                 PRIVAULT
               </span>
@@ -794,9 +828,13 @@ export default function DashboardPage() {
               <div className="hidden h-4 w-px bg-white/10 sm:block"></div>
 
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-                <span className="break-all text-xs font-semibold uppercase tracking-widest text-[#F5F5F0]/70 bg-white/5 border border-white/10 px-3 py-1.5">
-                  Vault: {user.username}
-                </span>
+                <button
+                  onClick={() => setShowSettingsModal(true)}
+                  className="break-all text-xs font-semibold uppercase tracking-widest text-[#F5F5F0]/70 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 px-3 py-1.5 cursor-pointer transition-all rounded-sm flex items-center gap-1.5"
+                >
+                  <Settings size={12} className="text-white/40" />
+                  <span>Vault: {user.username}</span>
+                </button>
                 <button
                   onClick={logout}
                   className="text-xs font-bold uppercase tracking-widest text-[#E41613] hover:text-white border border-[#E41613]/30 hover:border-[#E41613] px-3.5 py-1.5 transition-colors cursor-pointer"
@@ -995,8 +1033,11 @@ export default function DashboardPage() {
 
               {/* Documents Table */}
               {loadingDocs ? (
-                <div className="py-16 text-center text-xs tracking-widest uppercase text-white/30 animate-pulse">
-                  LOADING ENCRYPTED METADATA...
+                <div className="py-16 flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="animate-spin text-[#E41613]" size={20} />
+                  <span className="text-xs tracking-widest uppercase text-white/30">
+                    LOADING ENCRYPTED METADATA...
+                  </span>
                 </div>
               ) : displayedDocs.length === 0 ? (
                 <div className="py-16 text-center text-xs tracking-widest uppercase text-white/20">
@@ -1023,19 +1064,7 @@ export default function DashboardPage() {
                             onClick={() => setSelectedDoc(doc)}
                           >
                             <div className="flex items-center gap-3">
-                              <svg
-                                className="h-4 w-4 text-[#E41613] shrink-0"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                                ></path>
-                              </svg>
+                              <File className="h-4 w-4 text-[#E41613] shrink-0" size={16} />
                               <div className="flex flex-col gap-1">
                                 <span className="min-w-0 break-all sm:truncate sm:max-w-md font-medium">
                                   <ScrambledText text={doc.name} delay={20} />
@@ -1104,6 +1133,34 @@ export default function DashboardPage() {
                   </table>
                 </div>
               )}
+            </section>
+
+            {/* Folder Notes Section */}
+            <section className="panel-card p-6 mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <BookOpen size={16} className="text-[#E41613]" />
+                  <h3 className="font-serif text-sm font-semibold tracking-wide text-white uppercase">
+                    Notes for {folderPath[folderPath.length - 1]?.name || "Root Folder"}
+                  </h3>
+                </div>
+                {notesSaving ? (
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-[#E41613]/85 animate-pulse flex items-center gap-1">
+                    <Loader2 size={10} className="animate-spin" />
+                    Auto-saving...
+                  </span>
+                ) : (
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-white/30">
+                    Sealed locally
+                  </span>
+                )}
+              </div>
+              <textarea
+                value={notesText}
+                onChange={(e) => handleNotesChange(e.target.value)}
+                placeholder="Write some quick notes or logs for this folder context... (Notes are fully zero-knowledge, encrypted in browser, and saved to secure local storage)"
+                className="w-full min-h-28 bg-[#0D0E10] text-[#F5F5F0] border border-white/5 p-3 text-xs font-sans tracking-wide leading-relaxed outline-none focus:border-[#E41613]/40 rounded-sm custom-scrollbar resize-none"
+              />
             </section>
           </main>
         )}
@@ -1279,6 +1336,89 @@ export default function DashboardPage() {
                 className="w-full py-2.5 bg-transparent text-white/50 text-xs font-bold uppercase tracking-wider rounded transition-colors hover:text-white cursor-pointer"
               >
                 Skip File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Account Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 backdrop-blur-md px-4">
+          <div className="w-full h-auto max-w-xl bg-[#111215] border border-white/10 p-6 sm:p-8 rounded relative shadow-2xl font-sans">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowSettingsModal(false)}
+              className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
+              <Settings size={20} className="text-[#E41613]" />
+              <h2 className="font-serif text-lg font-bold text-white uppercase tracking-wider">
+                Account Settings
+              </h2>
+            </div>
+
+            {/* Content Tabs / Info */}
+            <div className="space-y-6">
+              {/* Profile Details */}
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  Secure Identity Context
+                </h4>
+                
+                <div className="grid grid-cols-3 gap-2 text-xs border border-white/5 p-4 bg-[#15161A]/40">
+                  <span className="text-white/40">Username</span>
+                  <span className="col-span-2 text-white font-mono font-medium">{user?.username}</span>
+                  
+                  <span className="text-white/40">User UUID</span>
+                  <span className="col-span-2 text-white font-mono break-all text-[11px]">{user?.userId}</span>
+                  
+                  <span className="text-white/40">Key Wrapping</span>
+                  <span className="col-span-2 text-green-400 font-semibold uppercase text-[10px]">
+                    AES-GCM (KEK Derived)
+                  </span>
+                </div>
+              </div>
+
+              {/* Public Key SPKI Card */}
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-bold text-[#8E929F] uppercase tracking-widest">
+                  RSA-OAEP 2048 Public Key (SPKI)
+                </h4>
+                <div className="bg-black/40 border border-white/5 p-3 rounded-sm font-mono text-[9px] text-white/50 break-all select-all leading-normal max-h-20 overflow-y-auto custom-scrollbar">
+                  {user?.publicKey}
+                </div>
+                <span className="block text-[9px] text-[#8E929F]/40 italic">
+                  *Used by other users to encrypt DEKs for secure folder sharing.
+                </span>
+              </div>
+
+              {/* Phase 2 Settings Notice */}
+              <div className="border border-amber-500/20 bg-amber-500/5 p-4 rounded-sm">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={16} />
+                  <div className="space-y-1">
+                    <h5 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                      Phase 2 Integration Preview
+                    </h5>
+                    <p className="text-[11px] text-[#8E929F] leading-relaxed">
+                      Zero-Knowledge features like changing the Master Password (requires key re-wrapping), Seed Phrase verification, and Profile Deletion are currently planned for the Phase 2 backend release.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex justify-end gap-3 mt-8 border-t border-white/5 pt-4">
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="py-2 px-4 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors hover:bg-white/10 cursor-pointer"
+              >
+                Close Settings
               </button>
             </div>
           </div>
