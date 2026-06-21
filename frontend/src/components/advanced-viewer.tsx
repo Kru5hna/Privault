@@ -13,7 +13,8 @@ import {
   Moon, 
   Sun,
   Download,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 
 interface AdvancedViewerProps {
@@ -343,6 +344,17 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
       toast.error("No matches found");
     }
   };
+
+  if (!pdfDoc) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16 bg-[#111215] w-full h-full min-h-[300px] border border-white/5 rounded">
+        <Loader2 size={24} className="animate-spin text-[#E41613]" />
+        <span className="text-xs tracking-widest uppercase text-white/30 font-bold">
+          PARSING SECURE DOCUMENT BLOCKS...
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div 
