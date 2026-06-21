@@ -1,3 +1,5 @@
+import { BIP39_WORDS } from "./bip39-words";
+
 /**
  * Client-side End-to-End Encryption (E2EE) engine for Privault.
  *
@@ -318,7 +320,8 @@ export async function getPublicKeyFromPrivateKey(
 /** Encrypt DEK with a random symmetric Link Key for sharing */
 export async function encryptDekForSharing(
   encryptedDekBase64: string,
-  rsaPrivateKey: CryptoKey
+  rsaPrivateKey: CryptoKey,
+  permission: "download" | "view" = "download"
 ): Promise<{ linkKey: string; reEncryptedDek: string; ownerEncryptedLinkKey: string }> {
   // 1. Unwrap the DEK using the owner's RSA private key
   const wrappedDek = base64ToUint8Array(encryptedDekBase64);
@@ -356,20 +359,21 @@ export async function encryptDekForSharing(
 
   // 5. Export the Link Key to raw bytes to be placed in URL fragment
   const exportedLinkKey = await window.crypto.subtle.exportKey("raw", linkKey);
+  const linkKeyB64 = arrayBufferToBase64(exportedLinkKey);
 
   // 6. Extract the RSA public key from the private key
   const publicKey = await getPublicKeyFromPrivateKey(rsaPrivateKey);
 
-  // 7. Wrap (encrypt) the Link Key with the owner's RSA Public Key using RSA-OAEP
-  const wrappedLinkKeyBuffer = await window.crypto.subtle.wrapKey(
-    "raw",
-    linkKey,
+  // 7. Encrypt the linkKey and permission payload with the owner's RSA Public Key using RSA-OAEP
+  const payload = new TextEncoder().encode(JSON.stringify({ k: linkKeyB64, p: permission }));
+  const wrappedLinkKeyBuffer = await window.crypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
     publicKey,
-    { name: "RSA-OAEP" }
+    payload
   );
 
   return {
-    linkKey: arrayBufferToBase64(exportedLinkKey),
+    linkKey: linkKeyB64,
     reEncryptedDek: arrayBufferToBase64(combined),
     ownerEncryptedLinkKey: arrayBufferToBase64(wrappedLinkKeyBuffer),
   };
@@ -379,20 +383,38 @@ export async function encryptDekForSharing(
 export async function decryptOwnerLinkKey(
   ownerEncryptedLinkKeyBase64: string,
   rsaPrivateKey: CryptoKey
-): Promise<string> {
-  const wrappedLinkKey = base64ToUint8Array(ownerEncryptedLinkKeyBase64);
-  const linkKey = await window.crypto.subtle.unwrapKey(
-    "raw",
-    wrappedLinkKey as BufferSource,
-    rsaPrivateKey,
-    { name: "RSA-OAEP" },
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["wrapKey"]
-  );
-
-  const exported = await window.crypto.subtle.exportKey("raw", linkKey);
-  return arrayBufferToBase64(exported);
+): Promise<{ linkKey: string; permission: "download" | "view" }> {
+  const wrappedPayload = base64ToUint8Array(ownerEncryptedLinkKeyBase64);
+  try {
+    const decryptedBuffer = await window.crypto.subtle.decrypt(
+      { name: "RSA-OAEP" },
+      rsaPrivateKey,
+      wrappedPayload as BufferSource
+    );
+    const decoded = new TextDecoder().decode(decryptedBuffer);
+    const parsed = JSON.parse(decoded);
+    return {
+      linkKey: parsed.k,
+      permission: parsed.p === "view" ? "view" : "download"
+    };
+  } catch (err) {
+    console.warn("Failed to decrypt as JSON, falling back to legacy raw unwrapKey", err);
+    // Legacy fallback: unwrap raw Link Key
+    const linkKey = await window.crypto.subtle.unwrapKey(
+      "raw",
+      wrappedPayload as BufferSource,
+      rsaPrivateKey,
+      { name: "RSA-OAEP" },
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["wrapKey"]
+    );
+    const exported = await window.crypto.subtle.exportKey("raw", linkKey);
+    return {
+      linkKey: arrayBufferToBase64(exported),
+      permission: "download"
+    };
+  }
 }
 
 /** Decrypt DEK using a Link Key (on the share landing page) */
@@ -426,4 +448,30 @@ export async function decryptDekWithLinkKey(
     ["decrypt"]
   );
 }
+
+/**
+ * Generate a 12-word BIP-39 mnemonic phrase.
+ */
+export async function generateMnemonic(): Promise<string> {
+  const entropy = window.crypto.getRandomValues(new Uint8Array(16)); // 128 bits
+  const hashBuffer = await window.crypto.subtle.digest("SHA-256", entropy);
+  const hashArray = new Uint8Array(hashBuffer);
+  const checksum = hashArray[0] >> 4; // First 4 bits of the hash
+
+  let binaryString = "";
+  for (let i = 0; i < entropy.length; i++) {
+    binaryString += entropy[i].toString(2).padStart(8, "0");
+  }
+  binaryString += checksum.toString(2).padStart(4, "0");
+
+  const words: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const indexBits = binaryString.slice(i * 11, (i + 1) * 11);
+    const index = parseInt(indexBits, 2);
+    words.push(BIP39_WORDS[index]);
+  }
+
+  return words.join(" ");
+}
+
 
