@@ -834,8 +834,8 @@ export default function DashboardPage() {
                           <td data-label="Seal Date" className="py-4 pr-4 text-xs text-white/40">
                             {formatDate(doc.created_at)}
                           </td>
-                          <td data-label="Actions" className="py-4 text-right whitespace-nowrap w-[380px]">
-                            <div className="flex flex-nowrap justify-end gap-4 items-center">
+                          <td data-label="Actions" className="py-4 sm:text-right w-full sm:whitespace-nowrap sm:w-[380px]">
+                            <div className="grid grid-cols-2 sm:flex sm:flex-nowrap justify-items-start sm:justify-end gap-4 items-center">
                               <button
                                 onClick={(e) => {
                                    e.stopPropagation();
