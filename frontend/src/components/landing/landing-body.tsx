@@ -16,7 +16,6 @@ import {
   AnimatedCounter,
   FadeUp,
   MagneticButton,
-  RevealText,
 } from "./motion-primitives";
 import { StrategyCard } from "./strategy-card";
 
