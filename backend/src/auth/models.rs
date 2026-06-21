@@ -41,6 +41,9 @@ pub struct LoginRequest {
 pub struct RegisterResponse {
     pub id: String,
     pub message: String,
+    /// 12-word recovery phrase (only returned once during registration)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_phrase: Option<String>,
 }
 
 /// Login response — provides everything the client needs to unwrap their private key.
