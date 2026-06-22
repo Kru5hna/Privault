@@ -4,13 +4,11 @@ use axum::{
 };
 use std::collections::BTreeMap;
 use sqlx::{Postgres, Row, Transaction};
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use serde::Deserialize;
 use super::models::*;
-use crate::{audit, auth::AuthSession, error::AppError, AppState};
+use crate::{audit, auth::AuthSession, error::AppError, storage::StorageService, AppState};
 
 /// Validate a MIME type string against known patterns.
 /// Files are encrypted at rest, so the server cannot sniff contents.
@@ -80,16 +78,11 @@ pub async fn upload_document(
     validate_mime_type(&mime_type)?;
 
     let doc_id = Uuid::new_v4();
-    let storage_path = format!("uploads/{}", doc_id);
+    let storage_path = StorageService::doc_key(&doc_id);
 
-    // Write file to local disk
-    let mut file = File::create(&storage_path).await.map_err(|e| {
-        tracing::error!("Failed to create file: {}", e);
-        AppError::Internal(anyhow::anyhow!("Internal error"))
-    })?;
-
-    file.write_all(&file_bytes).await.map_err(|e| {
-        tracing::error!("Failed to write file bytes: {}", e);
+    // Upload encrypted bytes to S3
+    state.storage.upload_bytes(&storage_path, file_bytes.clone()).await.map_err(|e| {
+        tracing::error!("Failed to upload to S3: {}", e);
         AppError::Internal(anyhow::anyhow!("Internal error"))
     })?;
 
@@ -303,10 +296,10 @@ pub async fn upload_thumbnail(
         _ => return Err(AppError::BadRequest("Missing thumbnail file".to_string())),
     };
 
-    // Write thumbnail to disk
-    let thumbnail_path = format!("thumbnails/{}", doc_id);
-    tokio::fs::write(&thumbnail_path, &data).await.map_err(|e| {
-        tracing::error!("Failed to write thumbnail: {}", e);
+    // Upload thumbnail to S3
+    let thumbnail_path = StorageService::thumb_key(&doc_id);
+    state.storage.upload_bytes(&thumbnail_path, data).await.map_err(|e| {
+        tracing::error!("Failed to upload thumbnail to S3: {}", e);
         AppError::Internal(anyhow::anyhow!("Internal error"))
     })?;
 
@@ -322,8 +315,6 @@ pub async fn upload_thumbnail(
         tracing::error!("Failed to update thumbnail path: {}", e);
         AppError::Internal(anyhow::anyhow!("Internal error"))
     })?;
-
-    tokio::fs::create_dir_all("thumbnails").await.ok();
 
     Ok(Json(serde_json::json!({
         "message": "Thumbnail uploaded successfully"
@@ -358,13 +349,12 @@ pub async fn download_thumbnail(
 
     let thumbnail_path: String = row.get("thumbnail_path");
 
-    let file = tokio::fs::File::open(&thumbnail_path).await.map_err(|e| {
-        tracing::error!("Thumbnail file not found: {} ({})", thumbnail_path, e);
+    let bytes = state.storage.download_bytes(&thumbnail_path).await.map_err(|e| {
+        tracing::error!("Failed to download thumbnail from S3: {}", e);
         AppError::NotFound("Thumbnail file not found".to_string())
     })?;
 
-    let stream = tokio_util::io::ReaderStream::new(file);
-    let body = axum::body::Body::from_stream(stream);
+    let body = axum::body::Body::from(bytes);
 
     Ok(body)
 }
@@ -397,9 +387,9 @@ pub async fn delete_thumbnail(
 
     let thumbnail_path: String = row.get("thumbnail_path");
 
-    // Delete from disk
-    if let Err(e) = tokio::fs::remove_file(&thumbnail_path).await {
-        tracing::warn!("Failed to delete thumbnail file: {} ({})", thumbnail_path, e);
+    // Delete from S3
+    if let Err(e) = state.storage.delete_object(&thumbnail_path).await {
+        tracing::warn!("Failed to delete thumbnail from S3: {} ({})", thumbnail_path, e);
     }
 
     // Clear DB fields
@@ -448,8 +438,8 @@ pub async fn download_document(
 
     let storage_path: String = row.get("storage_path");
 
-    let file = tokio::fs::File::open(&storage_path).await.map_err(|e| {
-        tracing::error!("File not found on disk: {} ({})", storage_path, e);
+    let bytes = state.storage.download_bytes(&storage_path).await.map_err(|e| {
+        tracing::error!("File not found on S3: {} ({})", storage_path, e);
         AppError::Internal(anyhow::anyhow!("Internal error"))
     })?;
 
@@ -463,8 +453,7 @@ pub async fn download_document(
         None,
     ).await;
 
-    let stream = tokio_util::io::ReaderStream::new(file);
-    let body = axum::body::Body::from_stream(stream);
+    let body = axum::body::Body::from(bytes);
 
     Ok(body)
 }
@@ -810,13 +799,13 @@ pub async fn upload_folder(
         // Resolve duplicate filename
         let unique_name = resolve_filename(&mut tx, session.user_id, folder_id, &filename).await?;
 
-        // Generate storage ID and write file
+        // Generate storage ID and upload to S3
         let doc_id = Uuid::new_v4();
-        let storage_path = format!("uploads/{}", doc_id);
+        let storage_path = StorageService::doc_key(&doc_id);
         let file_bytes = file_map.remove(&i).unwrap();
 
-        tokio::fs::write(&storage_path, &file_bytes).await.map_err(|e| {
-            tracing::error!("Failed to write file {}: {}", storage_path, e);
+        state.storage.upload_bytes(&storage_path, file_bytes.clone()).await.map_err(|e| {
+            tracing::error!("Failed to upload file to S3: {} ({})", storage_path, e);
             AppError::Internal(anyhow::anyhow!("Internal error"))
         })?;
 
@@ -858,10 +847,10 @@ pub async fn upload_folder(
 
     if let Err(e) = tx.commit().await {
         tracing::error!("Failed to commit folder upload transaction: {}", e);
-        // Best-effort cleanup: remove written files
+        // Best-effort cleanup: remove uploaded files from S3
         for result in &file_results {
-            let path = format!("uploads/{}", result.id);
-            let _ = tokio::fs::remove_file(&path).await;
+            let key = StorageService::doc_key(&result.id);
+            let _ = state.storage.delete_object(&key).await;
         }
         return Err(AppError::Internal(anyhow::anyhow!("Internal error")));
     }
