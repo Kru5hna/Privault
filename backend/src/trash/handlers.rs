@@ -282,9 +282,9 @@ pub async fn permanent_delete_document(
         .execute(&state.db)
         .await?;
 
-    // Delete from disk
-    if let Err(e) = tokio::fs::remove_file(&storage_path).await {
-        tracing::warn!("Failed to delete file: {} ({})", storage_path, e);
+    // Delete from S3
+    if let Err(e) = state.storage.delete_object(&storage_path).await {
+        tracing::warn!("Failed to delete file from S3: {} ({})", storage_path, e);
     }
 
     Ok(Json(serde_json::json!({
@@ -364,10 +364,10 @@ pub async fn permanent_delete_folder(
     .execute(&state.db)
     .await?;
 
-    // Delete files from disk
+    // Delete files from S3
     for path in &paths {
-        if let Err(e) = tokio::fs::remove_file(path).await {
-            tracing::warn!("Failed to delete file: {} ({})", path, e);
+        if let Err(e) = state.storage.delete_object(path).await {
+            tracing::warn!("Failed to delete file from S3: {} ({})", path, e);
         }
     }
 
@@ -415,7 +415,7 @@ pub async fn empty_trash(
     .fetch_all(&state.db)
     .await?;
 
-    let thumb_paths: Vec<String> = thumb_rows.iter().map(|r| r.get("storage_path")).collect();
+    let thumb_paths: Vec<String> = thumb_rows.iter().map(|r| r.get("thumbnail_path")).collect();
 
     // Delete all trashed documents
     sqlx::query("DELETE FROM documents WHERE owner_id = $1 AND deleted_at IS NOT NULL")
@@ -429,10 +429,10 @@ pub async fn empty_trash(
         .execute(&state.db)
         .await?;
 
-    // Delete files from disk
+    // Delete files from S3
     for path in paths.iter().chain(thumb_paths.iter()) {
-        if let Err(e) = tokio::fs::remove_file(path).await {
-            tracing::warn!("Failed to delete file during empty trash: {} ({})", path, e);
+        if let Err(e) = state.storage.delete_object(path).await {
+            tracing::warn!("Failed to delete file from S3 during empty trash: {} ({})", path, e);
         }
     }
 
@@ -502,10 +502,10 @@ pub async fn cleanup_expired_trash(state: &AppState) {
         tracing::error!("Failed to delete expired folders: {}", e);
     }
 
-    // Delete files from disk
+    // Delete files from S3
     for path in paths {
-        if let Err(e) = tokio::fs::remove_file(&path).await {
-            tracing::warn!("Failed to delete expired file: {} ({})", path, e);
+        if let Err(e) = state.storage.delete_object(&path).await {
+            tracing::warn!("Failed to delete expired file from S3: {} ({})", path, e);
         }
     }
 
