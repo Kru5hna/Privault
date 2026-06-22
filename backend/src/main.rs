@@ -90,6 +90,7 @@ async fn main() {
 
     // Route tree
     let app = Router::new()
+        .route("/", get(root))
         .route("/api/health", get(health_check))
         .route("/api/me", get(get_me))
         .nest("/api/auth", auth::router())
@@ -134,5 +135,12 @@ async fn get_me(session: AuthSession) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "user_id": session.user_id.to_string(),
         "username": session.username
+    }))
+}
+
+async fn root() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "name": "Privault API",
+        "status": "online"
     }))
 }
