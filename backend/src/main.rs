@@ -5,6 +5,7 @@ mod error;
 mod folders;
 mod recovery;
 mod shares;
+mod storage;
 mod tags;
 mod trash;
 
@@ -15,12 +16,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::auth::AuthSession;
 use crate::error::AppError;
+use crate::storage::StorageService;
 use axum::http::HeaderValue;
 
 /// Shared application state — passed to all handlers via Axum's State extractor.
 #[derive(Clone)]
 pub struct AppState {
     pub db: sqlx::PgPool,
+    pub storage: StorageService,
 }
 
 #[tokio::main]
@@ -56,15 +59,16 @@ async fn main() {
 
     tracing::info!("Database connection established");
 
-    // Ensure local uploads and thumbnails directories exist
-    tokio::fs::create_dir_all("uploads")
-        .await
-        .expect("Failed to create uploads directory");
-    tokio::fs::create_dir_all("thumbnails")
-        .await
-        .expect("Failed to create thumbnails directory");
+    // Initialize S3 client
+    let aws_config = aws_config::load_from_env().await;
+    let s3_client = aws_sdk_s3::Client::new(&aws_config);
+    let bucket_name = std::env::var("AWS_BUCKET_NAME").expect("AWS_BUCKET_NAME must be set");
+    let storage = StorageService::new(s3_client, bucket_name);
 
-    let state = AppState { db: db_pool };
+    let state = AppState {
+        db: db_pool,
+        storage,
+    };
 
     // Run trash cleanup on startup
     trash::cleanup_expired_trash(&state).await;
