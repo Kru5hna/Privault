@@ -76,9 +76,9 @@ const DocRow = React.memo(function DocRow({
 }: DocRowProps) {
   return (
     <div className="group border-b border-white/[0.02] last:border-b-0 hover:bg-white/[0.01] transition-colors">
-      <div className="doc-row-grid sm:table-row">
+      <div className="doc-row-grid">
         <div
-          className="py-4 pr-4 text-sm text-white/95 cursor-pointer sm:table-cell"
+          className="py-4 pr-4 text-sm text-white/95 cursor-pointer"
           onClick={() => onDocumentSelect(doc)}
         >
           <div className="flex items-center gap-3">
@@ -97,15 +97,15 @@ const DocRow = React.memo(function DocRow({
             </div>
           </div>
         </div>
-        <div className="py-4 pr-4 text-xs text-white/40 font-mono whitespace-nowrap sm:table-cell">
+        <div className="py-4 pr-4 text-xs text-white/40 font-mono whitespace-nowrap">
           <span className="sm:hidden text-[10px] font-bold tracking-wider text-white/30 uppercase mr-2">Size</span>
           {formatSize(doc.size)}
         </div>
-        <div className="py-4 pr-4 text-xs text-white/40 whitespace-nowrap sm:table-cell">
+        <div className="py-4 pr-4 text-xs text-white/40 whitespace-nowrap">
           <span className="sm:hidden text-[10px] font-bold tracking-wider text-white/30 uppercase mr-2">Seal Date</span>
           {formatDate(doc.created_at)}
         </div>
-        <div className="py-4 sm:text-right sm:whitespace-nowrap sm:table-cell">
+        <div className="py-4 sm:text-right sm:whitespace-nowrap">
           <div className="grid grid-cols-2 sm:flex sm:flex-nowrap justify-items-start sm:justify-end gap-4 items-center">
             <button
               onClick={(e) => { e.stopPropagation(); onPreview(doc); }}
@@ -153,27 +153,27 @@ const FolderRow = React.memo(function FolderRow({
 }: FolderRowProps) {
   return (
     <div className="group border-b border-white/[0.02] last:border-b-0 hover:bg-white/[0.01] transition-colors">
-      <div className="doc-row-grid sm:table-row">
+      <div className="doc-row-grid">
         <div
-          className="py-4 pr-4 text-sm text-white/95 cursor-pointer sm:table-cell"
+          className="py-4 pr-4 text-sm text-white/95 cursor-pointer"
           onClick={() => onFolderClick(folder.id, folder.name)}
         >
           <div className="flex items-center gap-3">
             <Folder className="h-4 w-4 text-amber-500 shrink-0" size={16} />
-            <span className="min-w-0 break-all sm:truncate sm:max-w-md font-semibold text-white">
+            <span className="min-w-0 break-all sm:truncate sm:max-w-md font-semibold text-white underline underline-offset-4 decoration-amber-500/30 group-hover:decoration-amber-500 transition-all duration-300">
               {folder.name}
             </span>
           </div>
         </div>
-        <div className="py-4 pr-4 text-xs text-white/40 font-mono whitespace-nowrap sm:table-cell">
+        <div className="py-4 pr-4 text-xs text-white/40 font-mono whitespace-nowrap">
           <span className="sm:hidden text-[10px] font-bold tracking-wider text-white/30 uppercase mr-2">Size</span>
           --
         </div>
-        <div className="py-4 pr-4 text-xs text-white/40 whitespace-nowrap sm:table-cell">
+        <div className="py-4 pr-4 text-xs text-white/40 whitespace-nowrap">
           <span className="sm:hidden text-[10px] font-bold tracking-wider text-white/30 uppercase mr-2">Seal Date</span>
           {formatDate(folder.created_at)}
         </div>
-        <div className="py-4 sm:text-right sm:whitespace-nowrap sm:table-cell">
+        <div className="py-4 sm:text-right sm:whitespace-nowrap">
           <div className="grid grid-cols-2 sm:flex sm:flex-nowrap justify-items-start sm:justify-end gap-4 items-center">
             <button
               onClick={() => onFolderClick(folder.id, folder.name)}
@@ -260,53 +260,55 @@ export const DocumentsTable = React.memo(function DocumentsTable({
   return (
     <div
       ref={parentRef}
-      style={{ maxHeight: "70vh", overflowY: "auto" }}
-      className="custom-scrollbar"
+      style={{ maxHeight: "70vh", overflowY: "auto", overflowX: "auto" }}
+      className="custom-scrollbar w-full"
     >
-      <TableHeader />
-      <div
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const item = allItems[virtualRow.index];
-          return (
-            <div
-              key={virtualRow.key}
-              data-index={virtualRow.index}
-              ref={virtualizer.measureElement}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              {isFolder(item) ? (
-                <FolderRow
-                  folder={item}
-                  onFolderClick={onFolderClick}
-                  onDeleteFolder={onDeleteFolder}
-                />
-              ) : (
-                <DocRow
-                  doc={item}
-                  docTagsCache={docTagsCache}
-                  isSandbox={isSandbox}
-                  onPreview={onPreview}
-                  onDownload={onDownload}
-                  onShare={onShare}
-                  onDelete={onDelete}
-                  onDocumentSelect={onDocumentSelect}
-                />
-              )}
-            </div>
-          );
-        })}
+      <div className="sm:min-w-[960px] w-full">
+        <TableHeader />
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const item = allItems[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {isFolder(item) ? (
+                  <FolderRow
+                    folder={item}
+                    onFolderClick={onFolderClick}
+                    onDeleteFolder={onDeleteFolder}
+                  />
+                ) : (
+                  <DocRow
+                    doc={item}
+                    docTagsCache={docTagsCache}
+                    isSandbox={isSandbox}
+                    onPreview={onPreview}
+                    onDownload={onDownload}
+                    onShare={onShare}
+                    onDelete={onDelete}
+                    onDocumentSelect={onDocumentSelect}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

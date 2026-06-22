@@ -89,7 +89,8 @@ export default function DashboardPage() {
   const debouncedSearch = useDebounce(searchQuery, 300);
   const [isDragActive, setIsDragActive] = useState(false);
   // ── Preview state ──
-  const [previewDoc, setPreviewDoc] = useState<{name: string} | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<SandboxDocument | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number>(-1);
   const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
 
   // ── Upload state ──
@@ -259,6 +260,33 @@ export default function DashboardPage() {
       }),
     [allFolders, currentFolderId, debouncedSearch]
   );
+
+  // ── Preview navigation handlers ──
+  const handlePreview = useCallback(async (doc: SandboxDocument) => {
+    if (!user || !privateKey) return;
+    const idx = displayedDocs.findIndex((d) => d.id === doc.id);
+    setPreviewIndex(idx);
+    setPreviewDoc(doc);
+    setPreviewBytes(null);
+    try {
+      const ciphertext = isSandbox ? (doc.ciphertext || new Uint8Array()) : await apiDownloadDocument(user.sessionToken, doc.id);
+      const decryptedBytes = useWorker
+        ? await decryptFileInWorker(ciphertext, doc.encrypted_dek, privateKey)
+        : await decryptFile(ciphertext, doc.encrypted_dek, privateKey);
+      setPreviewBytes(decryptedBytes);
+    } catch (err: unknown) {
+      toast.error(`Preview failed: ${err instanceof Error ? err.message : "Unknown"}`);
+      setPreviewDoc(null);
+    }
+  }, [user, privateKey, displayedDocs, isSandbox, useWorker]);
+
+  const handleNavigatePreview = useCallback((direction: "prev" | "next") => {
+    if (!user || !privateKey || displayedDocs.length === 0) return;
+    const newIndex = direction === "prev" ? previewIndex - 1 : previewIndex + 1;
+    if (newIndex < 0 || newIndex >= displayedDocs.length) return;
+    const doc = displayedDocs[newIndex];
+    handlePreview(doc);
+  }, [user, privateKey, displayedDocs, previewIndex, handlePreview]);
 
   // ── Loading guard ──
   if (authLoading || !user || !privateKey) {
@@ -549,22 +577,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handlePreview = async (doc: SandboxDocument) => {
-    if (!user || !privateKey) return;
-    setPreviewDoc({ name: doc.name });
-    setPreviewBytes(null);
-    try {
-      const ciphertext = isSandbox ? (doc.ciphertext || new Uint8Array()) : await apiDownloadDocument(user.sessionToken, doc.id);
-      const decryptedBytes = useWorker
-        ? await decryptFileInWorker(ciphertext, doc.encrypted_dek, privateKey)
-        : await decryptFile(ciphertext, doc.encrypted_dek, privateKey);
-      setPreviewBytes(decryptedBytes);
-    } catch (err: unknown) {
-      toast.error(`Preview failed: ${err instanceof Error ? err.message : "Unknown"}`);
-      setPreviewDoc(null);
-    }
-  };
-
   const handleDeleteAllFiles = () => {
     if (!user) return;
     const count = documents.length;
@@ -705,21 +717,21 @@ export default function DashboardPage() {
         {viewMode === "vault" && (
           <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
             <div className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-              <div>
+              <div className="flex-1 w-full">
                 <h1 className="font-serif text-2xl font-light tracking-wide text-white sm:text-3xl">
                   Document Vault
                 </h1>
-                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm font-medium tracking-wider text-white/50">
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm font-medium tracking-wider text-white/50 w-full">
                   <div className="flex flex-wrap items-center gap-2">
                     {folderPath.map((crumb, idx) => (
                       <React.Fragment key={crumb.id || "root"}>
                         {idx > 0 && <span className="text-white/20 select-none">/</span>}
                         <button
                           onClick={() => handleBreadcrumbClick(crumb, idx)}
-                          className={`transition-all cursor-pointer underline-offset-4 decoration-1 ${
+                          className={`transition-all cursor-pointer underline underline-offset-4 decoration-1 ${
                             idx === folderPath.length - 1
-                              ? "text-white"
-                              : "text-white/40 hover:text-[#E41613] hover:underline decoration-[#E41613]"
+                              ? "text-white decoration-white/30"
+                              : "text-white/40 hover:text-[#E41613] decoration-white/20 hover:decoration-[#E41613]"
                           }`}
                         >
                           {crumb.name}
@@ -730,9 +742,10 @@ export default function DashboardPage() {
                   {documents.length > 0 && (
                     <button
                       onClick={handleDeleteAllFiles}
-                      className="text-xs font-bold uppercase tracking-widest text-red-500 hover:text-white hover:bg-red-600/10 border border-red-500/20 hover:border-red-500 px-3 py-1 transition-all cursor-pointer rounded"
+                      className="btn-delete-tactical relative cursor-pointer"
                     >
-                      Delete All Files
+                      <span className="btn-bg" />
+                      <span className="btn-text">Delete All Files</span>
                     </button>
                   )}
                 </div>
@@ -856,9 +869,13 @@ export default function DashboardPage() {
 
       <FilePreviewModal
         isOpen={previewDoc !== null}
-        onClose={() => { setPreviewDoc(null); setPreviewBytes(null); }}
+        onClose={() => { setPreviewDoc(null); setPreviewBytes(null); setPreviewIndex(-1); }}
         fileName={previewDoc?.name || ""}
         fileBytes={previewBytes}
+        onPrev={() => handleNavigatePreview("prev")}
+        onNext={() => handleNavigatePreview("next")}
+        hasPrev={previewIndex > 0}
+        hasNext={previewIndex < displayedDocs.length - 1}
       />
 
       <ShareModal
@@ -881,6 +898,7 @@ export default function DashboardPage() {
       <RecoveryPhraseModal
         isOpen={showRecoveryModal}
         onClose={() => setShowRecoveryModal(false)}
+        onBack={() => { setShowRecoveryModal(false); setShowSettingsModal(true); }}
         mnemonic={recoveryMnemonic}
         username={user?.username || ""}
       />
