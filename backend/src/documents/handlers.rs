@@ -10,6 +10,44 @@ use serde::Deserialize;
 use super::models::*;
 use crate::{audit, auth::AuthSession, error::AppError, storage::StorageService, AppState};
 
+const DEFAULT_QUOTA_BYTES: i64 = 104_857_600; // 100 MB
+
+fn storage_quota_bytes() -> i64 {
+    std::env::var("STORAGE_QUOTA_BYTES")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(DEFAULT_QUOTA_BYTES)
+}
+
+async fn check_quota(
+    db: &sqlx::PgPool,
+    user_id: Uuid,
+    additional_bytes: i64,
+) -> Result<(), AppError> {
+    let used: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(size), 0) FROM documents WHERE owner_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to query storage quota: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    let quota = storage_quota_bytes();
+
+    if used + additional_bytes > quota {
+        return Err(AppError::BadRequest(format!(
+            "Storage quota exceeded. Used: {} MB, Limit: {} MB",
+            used / (1024 * 1024),
+            quota / (1024 * 1024),
+        )));
+    }
+
+    Ok(())
+}
+
 /// Validate a MIME type string against known patterns.
 /// Files are encrypted at rest, so the server cannot sniff contents.
 /// We validate format and allowlist, but ultimately trust the client-provided value.
@@ -76,6 +114,9 @@ pub async fn upload_document(
     }
 
     validate_mime_type(&mime_type)?;
+
+    // Check storage quota
+    check_quota(&state.db, session.user_id, file_bytes.len() as i64).await?;
 
     let doc_id = Uuid::new_v4();
     let storage_path = StorageService::doc_key(&doc_id);
@@ -755,6 +796,10 @@ pub async fn upload_folder(
             return Err(AppError::BadRequest(format!("Missing file_{}", i)));
         }
     }
+
+    // Check storage quota (sum of all files in this batch)
+    let total_bytes: i64 = file_map.values().map(|b| b.len() as i64).sum();
+    check_quota(&state.db, session.user_id, total_bytes).await?;
 
     // ── Phase 3: Process within a transaction ──────────────────────────────
     let mut tx = state.db.begin().await.map_err(|e| {
