@@ -84,6 +84,22 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json();
 }
 
+/** Fetch with AbortController timeout (default 15s). Rejects on timeout. */
+async function fetchWithTimeout(url: string, options: RequestInit & { timeout?: number } = {}): Promise<Response> {
+  const { timeout = 15_000, ...init } = options;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException("Timed out after " + timeout + "ms", "TimeoutError")), timeout);
+  const combinedSignal = init.signal
+    ? AbortSignal.any([init.signal, controller.signal])
+    : controller.signal;
+  try {
+    const res = await fetch(url, { ...init, signal: combinedSignal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Build headers with optional Bearer token */
 function authHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
@@ -103,7 +119,7 @@ function authHeaders(token?: string): Record<string, string> {
 export async function apiGetSalts(
   username: string
 ): Promise<{ auth_salt: string; kek_salt: string }> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${API_BASE_URL}/api/auth/salt/${encodeURIComponent(username)}`
   );
   return handleResponse(res);
@@ -119,8 +135,9 @@ export async function apiRegister(
   wrappedPrivateKey: string,
   wrappedPrivateKeyIv: string
 ): Promise<{ id: string; message: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/register`, {
     method: "POST",
+    timeout: 12_000,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       username,
@@ -149,8 +166,9 @@ export async function apiLogin(
   public_key: string;
   kek_salt: string;
 }> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
+    timeout: 12_000,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       username,
@@ -162,18 +180,19 @@ export async function apiLogin(
 
 /** Log out — revokes all sessions for the user */
 export async function apiLogout(sessionToken: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/logout`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/logout`, {
     method: "POST",
+    timeout: 8_000,
     headers: authHeaders(sessionToken),
   });
   await handleResponse(res);
 }
 
-/** Verify session validity and get user profile */
+/** Verify session validity and get user profile (8s timeout) */
 export async function apiGetMe(
   sessionToken: string
 ): Promise<{ user_id: string; username: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/me`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/me`, {
     method: "GET",
     headers: authHeaders(sessionToken),
   });
