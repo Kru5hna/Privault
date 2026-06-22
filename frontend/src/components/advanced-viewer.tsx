@@ -191,7 +191,7 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
   const [pdfDoc, setPdfDoc] = useState<{ numPages: number; getPage: (n: number) => Promise<{ getViewport: (p: { scale: number }) => { width: number; height: number }; render: (p: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => PDFRenderTask; getTextContent: () => Promise<{ items: { str: string }[] }> }> } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [scale, setScale] = useState(1.0);
+  const [scale, setScale] = useState(1.25);
   const [darkMode, setDarkMode] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -526,23 +526,35 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
 // 3. Video Viewer Component (Blob Streaming)
 // ─────────────────────────────────────────────────────────────────────────────
 function VideoViewer({ fileBytes, ext }: { fileBytes: Uint8Array; ext: string }) {
-  const objectUrl = React.useMemo(() => {
-    const mime = `video/${ext === "mov" ? "mp4" : ext}`;
-    const blob = new Blob([fileBytes as unknown as BlobPart], { type: mime });
-    return URL.createObjectURL(blob);
-  }, [fileBytes, ext]);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [objectUrl]);
+    const mime = `video/${ext === "mov" ? "mp4" : ext}`;
+    const file = new File([fileBytes as BlobPart], `video.${ext}`, { type: mime });
+    objectUrlRef.current = URL.createObjectURL(file);
+    if (videoRef.current) {
+      videoRef.current.src = objectUrlRef.current;
+      videoRef.current.load();
+    }
+
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, [fileBytes, ext]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-[#0D0E10] border border-white/5 rounded overflow-hidden">
       <video 
-        src={objectUrl} 
-        controls 
+        ref={videoRef}
+        controls
+        preload="auto"
         className="w-full h-full max-h-[80vh] object-contain"
-        onContextMenu={(e) => e.preventDefault()} // Disable right click download
+        onContextMenu={(e) => e.preventDefault()}
+        onError={(e) => console.error("Video playback error:", e.currentTarget.error?.message)}
       />
     </div>
   );
