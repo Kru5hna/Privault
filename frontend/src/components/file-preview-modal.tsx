@@ -1,8 +1,8 @@
 "use client";
 
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
-import { Loader2, ShieldCheck, X } from "lucide-react";
+import { Loader2, ShieldCheck, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 const AdvancedViewer = dynamic(
   () => import("./advanced-viewer").then((mod) => ({ default: mod.AdvancedViewer })),
@@ -24,9 +24,13 @@ interface FilePreviewModalProps {
   onClose: () => void;
   fileName: string;
   fileBytes: Uint8Array | null;
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
 }
 
-export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FilePreviewModalProps) {
+export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes, onPrev, onNext, hasPrev, hasNext }: FilePreviewModalProps) {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   const mimeMap: Record<string, string> = {
     pdf: "application/pdf",
@@ -57,10 +61,30 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
   };
   const mimeType = mimeMap[ext] || "application/octet-stream";
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      onClose();
+    } else if (e.key === "ArrowLeft" && hasPrev && onPrev) {
+      e.preventDefault();
+      onPrev();
+    } else if (e.key === "ArrowRight" && hasNext && onNext) {
+      e.preventDefault();
+      onNext();
+    }
+  }, [onClose, onPrev, onNext, hasPrev, hasNext]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 sm:p-8 backdrop-blur-md">
+    <div ref={containerRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 sm:p-8 backdrop-blur-md">
       <div className="w-full h-full max-w-6xl flex flex-col bg-[#15161A] border border-white/10 rounded overflow-hidden shadow-2xl relative">
         
         {/* Header */}
@@ -83,9 +107,27 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes }: FileP
         </div>
 
         {/* Content Viewport */}
-        <div className="flex-1 overflow-hidden flex items-center justify-center p-6 bg-[#0D0E10] relative dotted-grid-dark">
+        <div className="flex-1 overflow-hidden flex items-center justify-center p-6 bg-[#0D0E10] relative dotted-grid-dark group">
           <div className="noise-overlay absolute inset-0 pointer-events-none opacity-20" />
-          
+
+          {/* Left navigation arrow */}
+          <button
+            onClick={onPrev}
+            disabled={!hasPrev}
+            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/60 text-white/80 hover:bg-[#E41613]/80 hover:text-white transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0 disabled:pointer-events-none cursor-pointer"
+          >
+            <ChevronLeft size={28} />
+          </button>
+
+          {/* Right navigation arrow */}
+          <button
+            onClick={onNext}
+            disabled={!hasNext}
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/60 text-white/80 hover:bg-[#E41613]/80 hover:text-white transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0 disabled:pointer-events-none cursor-pointer"
+          >
+            <ChevronRight size={28} />
+          </button>
+
           {!fileBytes ? (
             <div className="flex flex-col items-center gap-4 text-center max-w-sm">
               <div className="relative">
