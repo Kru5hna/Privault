@@ -15,6 +15,7 @@ mod models;
 pub mod session;
 
 use axum::{
+    middleware,
     routing::{get, post},
     Router,
 };
@@ -32,7 +33,8 @@ pub use session::AuthSession;
 pub fn router() -> Router<crate::AppState> {
     Router::new()
         .route("/register", post(handlers::register))
-        .route("/login", post(handlers::login))
+        .route("/login", post(handlers::login)
+            .route_layer(middleware::from_fn(crate::ratelimit::rate_limit_login)))
         .route("/logout", post(handlers::logout))
         .route("/salt/:username", get(handlers::get_salts))
 }
