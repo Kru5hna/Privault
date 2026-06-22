@@ -84,8 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Session is valid — enter locked state
         setUser(session);
         setStatus("locked");
-      } catch {
-        // Session expired or invalid — clean up
+      } catch (err) {
+        console.error("Session restore failed:", err);
         localStorage.removeItem(SESSION_STORAGE_KEY);
         setStatus("unauthenticated");
       }
@@ -175,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 6. Auto-login after successful registration
       await loginInternal(username, password);
     } catch (err: unknown) {
+      console.error("Registration failed:", err);
       const message = err instanceof Error ? err.message : "Registration failed";
       setError(message);
       setStatus("unauthenticated");
@@ -188,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await loginInternal(username, password);
     } catch (err: unknown) {
+      console.error("Login failed:", err);
       const message = err instanceof Error ? err.message : "Invalid credentials";
       setError(message);
       setStatus("unauthenticated");
@@ -217,7 +219,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setPrivateKey(decryptedPrivateKey);
       setStatus("unlocked");
-    } catch {
+    } catch (err) {
+      console.error("Unlock failed:", err);
       setError("Incorrect master password");
     }
   }, [user]);
@@ -258,6 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStatus("unlocked");
       router.push("/dashboard");
     } catch (err: unknown) {
+      console.error("Sandbox enter failed:", err);
       const message = err instanceof Error ? err.message : "Failed to enter sandbox";
       setError(message);
     }
