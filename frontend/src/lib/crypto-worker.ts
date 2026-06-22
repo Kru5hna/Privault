@@ -1,6 +1,11 @@
 export function createCryptoWorker() {
   if (typeof window === "undefined") return null;
-  return new Worker(new URL("../workers/crypto.worker.ts", import.meta.url));
+  try {
+    return new Worker(new URL("../workers/crypto.worker.ts", import.meta.url));
+  } catch (err) {
+    console.error("Failed to create crypto worker:", err);
+    return null;
+  }
 }
 
 export async function encryptFileInWorker(
