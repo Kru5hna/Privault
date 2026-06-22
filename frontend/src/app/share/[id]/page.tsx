@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   apiGetShareLink,
   apiDownloadSharedDocument,
@@ -16,12 +17,26 @@ import {
   AlertTriangle,
   FileText,
   Image as ImageIcon,
+  Film,
   Lock,
   Loader2,
   CheckCircle,
   XCircle,
   Eye,
+  FileCode,
 } from "lucide-react";
+
+const AdvancedViewer = dynamic(
+  () => import("@/components/advanced-viewer").then((mod) => ({ default: mod.AdvancedViewer })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 size={24} className="animate-spin text-[#E41613]" />
+      </div>
+    ),
+  }
+);
 
 type PageStatus =
   | "loading"
@@ -31,16 +46,20 @@ type PageStatus =
   | "complete"
   | "error";
 
-// ── Static Helper Functions (Moved outside component to satisfy rules and optimize) ──
 const getFileExtension = (filename: string): string => {
   const parts = filename.split(".");
   return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
 };
 
+const imageExts = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+const videoExts = ["mp4", "webm", "ogg", "mov"];
+const textExts = ["txt", "md", "json", "csv", "html", "xml", "js", "ts", "jsx", "tsx", "rs", "go", "py", "sh", "yaml", "yml", "css"];
+
 const getFileIcon = (filename: string) => {
   const ext = getFileExtension(filename);
-  const imageExts = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
   if (imageExts.includes(ext)) return <ImageIcon size={32} />;
+  if (videoExts.includes(ext)) return <Film size={32} />;
+  if (textExts.includes(ext) || ext === "pdf") return <FileCode size={32} />;
   return <FileText size={32} />;
 };
 
@@ -55,23 +74,34 @@ const getMimeType = (filename: string): string => {
     webp: "image/webp",
     svg: "image/svg+xml",
     bmp: "image/bmp",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    ogg: "video/ogg",
+    mov: "video/mp4",
     txt: "text/plain",
     md: "text/markdown",
     json: "application/json",
     csv: "text/csv",
     html: "text/html",
     xml: "text/xml",
+    js: "text/javascript",
+    ts: "text/typescript",
+    jsx: "text/jsx",
+    tsx: "text/tsx",
+    rs: "text/rust",
+    go: "text/go",
+    py: "text/python",
+    sh: "text/x-sh",
+    yaml: "text/yaml",
+    yml: "text/yaml",
+    css: "text/css",
   };
   return mimeMap[ext] || "application/octet-stream";
 };
 
 const isPreviewable = (filename: string): boolean => {
   const ext = getFileExtension(filename);
-  const previewableExts = [
-    "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp",
-    "pdf", "txt", "md", "json", "csv",
-  ];
-  return previewableExts.includes(ext);
+  return [...imageExts, ...videoExts, "pdf", ...textExts].includes(ext);
 };
 
 const formatSize = (bytes: number): string => {
@@ -100,12 +130,11 @@ export default function ShareLandingPage() {
   const [status, setStatus] = useState<PageStatus>("loading");
   const [error, setError] = useState<string>("");
   const [shareMeta, setShareMeta] = useState<ShareLinkMetadata | null>(null);
-  const [linkKey, setLinkKey] = useState<string>(""); // Avoid empty space issues
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [linkKey, setLinkKey] = useState<string>("");
+  const [decryptedBytes, setDecryptedBytes] = useState<Uint8Array | null>(null);
   const [previewType, setPreviewType] = useState<string>("unknown");
   const [permission, setPermission] = useState<"download" | "view">("download");
 
-  // Extract the Link Key and permission from the hash fragment on mount safely
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.length > 1) {
@@ -120,7 +149,6 @@ export default function ShareLandingPage() {
     }
   }, [setLinkKey, setPermission]);
 
-  // Fetch share metadata once we have the shareId
   useEffect(() => {
     if (!shareId) return;
 
@@ -157,16 +185,13 @@ export default function ShareLandingPage() {
 
     setStatus("decrypting");
     try {
-      // 1. Decrypt the DEK using the Link Key from the URL fragment
       const dek = await decryptDekWithLinkKey(
         shareMeta.encrypted_dek,
         linkKey
       );
 
-      // 2. Download the raw ciphertext from the server
       const ciphertext = await apiDownloadSharedDocument(shareId);
 
-      // 3. Decrypt the file in the browser
       const iv = ciphertext.slice(0, 12);
       const encryptedPayload = ciphertext.slice(12);
 
@@ -176,11 +201,10 @@ export default function ShareLandingPage() {
         encryptedPayload as BufferSource
       );
 
-      const decryptedBytes = new Uint8Array(decryptedBuffer);
+      const decrypted = new Uint8Array(decryptedBuffer);
 
-      // 4. Trigger browser download
       const mimeType = getMimeType(shareMeta.document_name);
-      const blob = new Blob([decryptedBytes as unknown as BlobPart], { type: mimeType });
+      const blob = new Blob([decrypted as unknown as BlobPart], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
       const linkElement = document.createElement("a");
       linkElement.href = url;
@@ -224,12 +248,10 @@ export default function ShareLandingPage() {
         encryptedPayload as BufferSource
       );
 
-      const decryptedBytes = new Uint8Array(decryptedBuffer);
+      const decrypted = new Uint8Array(decryptedBuffer);
       const mimeType = getMimeType(shareMeta.document_name);
-      const blob = new Blob([decryptedBytes as unknown as BlobPart], { type: mimeType });
-      const url = window.URL.createObjectURL(blob);
 
-      setPreviewUrl(url);
+      setDecryptedBytes(decrypted);
       setPreviewType(mimeType);
       setStatus("previewing");
     } catch (err: unknown) {
@@ -293,7 +315,7 @@ export default function ShareLandingPage() {
             <Lock size={32} className="text-[#E41613]" />
           </div>
           <h2 className="text-lg font-bold text-white tracking-wider uppercase mb-2">
-            Decrypting...
+            Decrypting file...
           </h2>
           <p className="text-xs text-[#8E929F] tracking-wider">
             Your file is being decrypted in the browser using the embedded key.
@@ -339,7 +361,7 @@ export default function ShareLandingPage() {
   }
 
   // ── Preview State ──
-  if (status === "previewing" && previewUrl) {
+  if (status === "previewing" && decryptedBytes) {
     return (
       <div className="flex min-h-screen flex-col bg-[#0D0E10] text-[#F5F5F0] dotted-grid-dark relative">
         <div className="noise-overlay absolute inset-0 pointer-events-none opacity-20" />
@@ -374,8 +396,7 @@ export default function ShareLandingPage() {
               )}
               <button
                 onClick={() => {
-                  if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-                  setPreviewUrl(null);
+                  setDecryptedBytes(null);
                   setStatus("ready");
                 }}
                 className="text-xs font-bold uppercase tracking-widest text-[#8E929F] hover:text-white transition-colors cursor-pointer px-3 py-2"
@@ -386,28 +407,14 @@ export default function ShareLandingPage() {
           </div>
         </header>
 
-        {/* Preview Content */}
+        {/* Preview Content using AdvancedViewer */}
         <main className="relative z-10 flex-1 flex items-center justify-center p-6">
-          {previewType.startsWith("image/") ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={previewUrl}
-              alt={shareMeta?.document_name}
-              className="max-w-full max-h-[80vh] object-contain rounded border border-white/5"
-            />
-          ) : previewType === "application/pdf" ? (
-            <iframe
-              src={previewUrl}
-              className="w-full max-w-4xl h-[80vh] border border-white/5 rounded bg-white"
-              title="PDF Preview"
-            />
-          ) : previewType.startsWith("text/") || previewType === "application/json" ? (
-            <TextPreview url={previewUrl} />
-          ) : (
-            <div className="text-center text-sm text-white/40">
-              Preview not available for this file type.
-            </div>
-          )}
+          <AdvancedViewer
+            fileName={shareMeta?.document_name || ""}
+            fileBytes={decryptedBytes}
+            mimeType={previewType}
+            allowDownload={permission !== "view"}
+          />
         </main>
       </div>
     );
@@ -539,7 +546,7 @@ export default function ShareLandingPage() {
                 ) : (
                   <div className="text-center p-4 bg-red-500/5 border border-red-500/20 rounded">
                     <p className="text-xs text-red-400 font-semibold leading-relaxed">
-                      This file is View Only, but this file type cannot be previewed in the browser. Downloading is disabled by the owner.
+                      Preview is not available for this file type.
                     </p>
                   </div>
                 )}
@@ -559,36 +566,5 @@ export default function ShareLandingPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-// ── Text/JSON/CSV Preview Sub-component ──
-function TextPreview({ url }: { url: string }) {
-  const [text, setText] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(url)
-      .then((r) => r.text())
-      .then((t) => {
-        setText(t);
-        setLoading(false);
-      })
-      .catch(() => {
-        setText("Failed to load text preview.");
-        setLoading(false);
-      });
-  }, [url]);
-
-  if (loading) {
-    return (
-      <div className="text-xs text-white/30 animate-pulse">Loading preview...</div>
-    );
-  }
-
-  return (
-    <pre className="w-full max-w-4xl max-h-[80vh] overflow-auto bg-[#111215] border border-white/5 p-6 text-xs font-mono text-white/80 whitespace-pre-wrap break-words custom-scrollbar">
-      {text}
-    </pre>
   );
 }
