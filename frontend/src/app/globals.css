@@ -287,6 +287,7 @@ html.lenis, html.lenis body {
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -573,7 +574,7 @@ html.lenis, html.lenis body {
 /* Virtualized document table grid layout */
 .doc-row-grid {
   display: grid;
-  grid-template-columns: 1fr auto auto 380px;
+  grid-template-columns: minmax(0, 1fr) 80px 170px 380px;
   gap: 0;
 }
 
