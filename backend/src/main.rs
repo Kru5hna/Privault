@@ -71,7 +71,7 @@ async fn main() {
 
     // CORS — restrict to known origins in production.
     let cors_origin =
-        std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
+        std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:3000,http://127.0.0.1:3000,https://privault-three.vercel.app".to_string());
     let cors = if cors_origin == "*" {
         CorsLayer::new()
             .allow_origin(Any)
