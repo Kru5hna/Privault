@@ -234,13 +234,12 @@ pub async fn download_shared_document(
     })?;
 
     let storage_path: String = row.get("storage_path");
-    let file = tokio::fs::File::open(&storage_path).await.map_err(|e| {
-        tracing::error!("File not found on disk: {} ({})", storage_path, e);
+    let bytes = state.storage.download_bytes(&storage_path).await.map_err(|e| {
+        tracing::error!("File not found on S3: {} ({})", storage_path, e);
         AppError::Internal(anyhow::anyhow!("Internal error"))
     })?;
 
-    let stream = tokio_util::io::ReaderStream::new(file);
-    let body = axum::body::Body::from_stream(stream);
+    let body = axum::body::Body::from(bytes);
 
     Ok(body)
 }
