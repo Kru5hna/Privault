@@ -7,6 +7,7 @@ import { toast } from "sonner";
 interface RecoveryPhraseModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onBack?: () => void;
   mnemonic: string;
   username: string;
 }
@@ -14,6 +15,7 @@ interface RecoveryPhraseModalProps {
 export function RecoveryPhraseModal({
   isOpen,
   onClose,
+  onBack,
   mnemonic,
   username,
 }: RecoveryPhraseModalProps) {
@@ -121,6 +123,17 @@ SAFETY INSTRUCTIONS:
       <div className="relative z-10 w-full max-w-lg panel-card p-6 sm:p-10 my-auto">
         {/* Header */}
         <div className="mb-6 text-center">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="absolute top-4 left-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-white/50 hover:text-[#E41613] transition-colors cursor-pointer z-10"
+            >
+              <svg className="h-4 w-4 transform transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+          )}
           <div className="inline-flex items-center gap-2">
             <span className="font-serif text-2xl font-light tracking-wide text-[#F5F5F0]">
               SECURE RECOVERY PHRASE
