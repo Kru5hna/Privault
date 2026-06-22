@@ -10,7 +10,7 @@ mod trash;
 
 use axum::{routing::get, Json, Router};
 use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{Any, AllowOrigin, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::auth::AuthSession;
@@ -78,12 +78,12 @@ async fn main() {
             .allow_methods(Any)
             .allow_headers(Any)
     } else {
+        let origins: Vec<HeaderValue> = cors_origin
+            .split(',')
+            .filter_map(|o| o.trim().parse::<HeaderValue>().ok())
+            .collect();
         CorsLayer::new()
-            .allow_origin(
-                cors_origin
-                    .parse::<HeaderValue>()
-                    .expect("Invalid CORS_ORIGIN"),
-            )
+            .allow_origin(AllowOrigin::list(origins))
             .allow_methods(Any)
             .allow_headers(Any)
     };
