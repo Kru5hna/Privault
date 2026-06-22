@@ -20,7 +20,7 @@ export const DashboardHeader = React.memo(function DashboardHeader({
   return (
     <header className="sticky top-0 z-30 border-b border-white/5 bg-[#15161A]/80 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-start justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
-        <div className={`flex items-center gap-3 transition-all duration-300 ${sidebarOpen ? "opacity-0 pointer-events-none w-0 overflow-hidden" : "pl-12 opacity-100"}`}>
+        <div className={`flex items-center gap-3 transition-all duration-300 ${sidebarOpen ? "opacity-0 pointer-events-none w-0 overflow-hidden" : "pl-12 min-[1100px]:pl-0 opacity-100"}`}>
           <span className="font-serif text-xl font-bold tracking-[0.25em] text-[#F5F5F0]">
             PRIVAULT
           </span>
@@ -43,7 +43,7 @@ export const DashboardHeader = React.memo(function DashboardHeader({
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <button
               onClick={onOpenSettings}
-              className="break-all text-xs font-semibold uppercase tracking-widest text-[#F5F5F0]/70 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 px-3 py-1.5 cursor-pointer transition-all rounded-sm flex items-center gap-1.5"
+              className="break-all text-xs font-semibold tracking-widest text-[#F5F5F0]/70 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 px-3 py-1.5 cursor-pointer transition-all rounded-sm flex items-center gap-1.5"
             >
               <Settings size={12} className="text-white/40" />
               <span>Vault: {user.username}</span>
