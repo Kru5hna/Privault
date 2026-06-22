@@ -3,6 +3,7 @@ mod audit;
 mod documents;
 mod error;
 mod folders;
+mod ratelimit;
 mod recovery;
 mod shares;
 mod storage;
