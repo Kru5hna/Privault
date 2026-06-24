@@ -25,7 +25,8 @@ async fn check_quota(
     additional_bytes: i64,
 ) -> Result<(), AppError> {
     let used: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(size), 0) FROM documents WHERE owner_id = $1 AND deleted_at IS NULL",
+        "SELECT COALESCE(SUM(size), 0)::BIGINT FROM documents WHERE owner_id = $1 AND deleted_at IS NULL
+",
     )
     .bind(user_id)
     .fetch_one(db)
