@@ -122,7 +122,7 @@ export function ShareModal({
       const shareUrl = `${origin}/share/${share.id}#${linkKey}:${permission}`;
       setGeneratedLink(shareUrl);
       toast.success("Cryptographic share link generated!");
-      logActivity(user.userId, "Share created", `Created share link for: ${doc.name}`);
+      logActivity(user.sessionToken, "Share created", `Created share link for: ${doc.name}`);
 
       // Reload list
       loadExistingShares();
@@ -146,7 +146,7 @@ export function ShareModal({
     try {
       await apiRevokeShareLink(user.sessionToken, shareId);
       toast.success("Share link revoked");
-      logActivity(user.userId, "Share revoked", `Revoked share link for: ${doc.name}`);
+      logActivity(user.sessionToken, "Share revoked", `Revoked share link for: ${doc.name}`);
       loadExistingShares();
       if (generatedLink.includes(shareId)) {
         setGeneratedLink("");
