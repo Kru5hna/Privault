@@ -82,23 +82,22 @@ pub async fn store_key(
 
 pub async fn recover(
     State(state): State<crate::AppState>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<RecoverRequest>,
 ) -> Result<Json<RecoverResponse>, AppError> {
-    if payload.username.trim().is_empty() {
-        return Err(AppError::BadRequest("Username is required".to_string()));
-    }
-    if payload.recovery_phrase.trim().is_empty() {
-        return Err(AppError::BadRequest("Recovery phrase is required".to_string()));
-    }
+    // Validate input format first — cheap, before hitting DB or doing Argon2 verify
+    crate::validation::validate_username(&payload.username)?;
+    crate::validation::validate_recovery_phrase(&payload.recovery_phrase)?;
 
     // Hash the phrase to look up the user
     let phrase_hash = super::hash_phrase(&payload.recovery_phrase);
 
-    // Find user by recovery_phrase_hash
+    // Find user by recovery_phrase_hash — also pull lockout fields
     let row = sqlx::query(
         r#"
         SELECT id, username, recovery_auth_hash, public_key,
-               recovery_wrapped_key, recovery_wrapped_key_iv
+               recovery_wrapped_key, recovery_wrapped_key_iv,
+               recovery_lockout_until, recovery_failed_attempts
         FROM users
         WHERE recovery_phrase_hash = $1
         "#,
@@ -111,6 +110,20 @@ pub async fn recover(
         AppError::BadRequest("Invalid recovery phrase or username".to_string())
     })?;
 
+    // Check per-username lockout before doing the expensive Argon2 verify.
+    let lockout_until: Option<chrono::DateTime<chrono::Utc>> = row.get("recovery_lockout_until");
+    if let Some(until) = lockout_until {
+        if until > chrono::Utc::now() {
+            return Err(AppError::BadRequest(
+                "Account temporarily locked due to too many failed recovery attempts. Try again later.".to_string(),
+            ));
+        }
+    }
+
+    let user_id: uuid::Uuid = row.get("id");
+    let username: String = row.get("username");
+    let failed_attempts: i32 = row.get("recovery_failed_attempts");
+
     // Verify the derived auth verifier matches the stored hash
     let derived_verifier = super::derive_recovery_auth_verifier(&payload.recovery_phrase);
     let stored_auth_hash: String = row.get("recovery_auth_hash");
@@ -118,12 +131,51 @@ pub async fn recover(
     let parsed_hash = PasswordHash::new(&stored_auth_hash)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Stored hash parse error: {}", e)))?;
 
-    Argon2::default()
+    if Argon2::default()
         .verify_password(derived_verifier.as_bytes(), &parsed_hash)
-        .map_err(|_| AppError::BadRequest("Invalid recovery phrase or username".to_string()))?;
+        .is_err()
+    {
+        // Increment failed attempts and possibly lock out.
+        let new_count = failed_attempts + 1;
+        let lockout_threshold = std::env::var("RECOVERY_LOCKOUT_THRESHOLD")
+            .ok()
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(10);
+        let lockout_hours = std::env::var("RECOVERY_LOCKOUT_HOURS")
+            .ok()
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(24);
 
-    let user_id: uuid::Uuid = row.get("id");
-    let username: String = row.get("username");
+        let _ = sqlx::query(
+            r#"
+            UPDATE users
+            SET recovery_failed_attempts = $1,
+                recovery_lockout_until = CASE
+                    WHEN $1 >= $2 THEN NOW() + ($3::TEXT || ' hours')::INTERVAL
+                    ELSE recovery_lockout_until
+                END
+            WHERE id = $4
+            "#,
+        )
+        .bind(new_count)
+        .bind(lockout_threshold)
+        .bind(lockout_hours.to_string())
+        .bind(user_id)
+        .execute(&state.db)
+        .await;
+
+        return Err(AppError::BadRequest(
+            "Invalid recovery phrase or username".to_string(),
+        ));
+    }
+
+    // Success — reset the failed-attempt counter.
+    let _ = sqlx::query(
+        "UPDATE users SET recovery_failed_attempts = 0, recovery_lockout_until = NULL WHERE id = $1",
+    )
+    .bind(user_id)
+    .execute(&state.db)
+    .await;
 
     // Create a new session
     let mut token_bytes = [0u8; 32];
@@ -134,17 +186,38 @@ pub async fn recover(
     );
 
     let token_hash_hex = hash_token(&session_token);
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
+    let expires_at = chrono::Utc::now() + chrono::Duration::hours(crate::auth::session::SESSION_IDLE_HOURS);
+
+    // Capture fingerprint on recovery sessions too.
+    let ip_address: Option<String> = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let user_agent: Option<String> = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let ip_prefix = ip_address.as_deref().map(crate::auth::session::ip_prefix);
+    let ua_prefix = user_agent.as_deref().map(crate::auth::session::ua_prefix);
 
     sqlx::query(
         r#"
-        INSERT INTO sessions (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
+        INSERT INTO sessions (
+            user_id, token_hash, expires_at,
+            ip_address, user_agent, ip_prefix, ua_prefix, last_used_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
         "#,
     )
     .bind(user_id)
     .bind(&token_hash_hex)
     .bind(expires_at)
+    .bind(&ip_address)
+    .bind(&user_agent)
+    .bind(&ip_prefix)
+    .bind(&ua_prefix)
     .fetch_optional(&state.db)
     .await?;
 
