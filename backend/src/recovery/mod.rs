@@ -19,14 +19,28 @@ mod handlers;
 mod models;
 mod wordlist;
 
-use axum::{routing::post, Router};
+use axum::{
+    middleware,
+    routing::post,
+    Router,
+};
 
 /// Creates the recovery sub-router, nested under `/api/recovery` in main.rs.
 pub fn router() -> Router<crate::AppState> {
     Router::new()
         .route("/store-key", post(handlers::store_key))
-        .route("/recover", post(handlers::recover))
-        .route("/change-password", post(handlers::change_password))
+        .route(
+            "/recover",
+            post(handlers::recover).route_layer(middleware::from_fn(
+                crate::ratelimit::rate_limit_recovery,
+            )),
+        )
+        .route(
+            "/change-password",
+            post(handlers::change_password).route_layer(middleware::from_fn(
+                crate::ratelimit::rate_limit_change_password,
+            )),
+        )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,18 +216,20 @@ mod tests {
     fn test_validate_rejects_bad_checksum() {
         let words = generate_phrase();
         let mut bad = words.clone();
-        // Replace last word with a different valid word
         let last = bad.last().unwrap().clone();
+        let mut found_invalid = false;
         for w in wordlist::BIP39_WORDS.iter() {
             if *w != last {
                 bad[11] = w.to_string();
-                break;
+                let phrase = bad.join(" ");
+                if let Err(err) = validate_phrase(&phrase) {
+                    assert!(err.contains("checksum"), "expected checksum error, got: {}", err);
+                    found_invalid = true;
+                    break;
+                }
             }
         }
-        let phrase = bad.join(" ");
-        let result = validate_phrase(&phrase);
-        assert!(result.is_err(), "expected checksum error, but validation passed");
-        assert!(result.unwrap_err().contains("checksum"));
+        assert!(found_invalid, "Could not find any replacement word that failed checksum check");
     }
 
     #[test]
