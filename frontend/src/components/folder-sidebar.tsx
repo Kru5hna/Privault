@@ -1,20 +1,21 @@
 import React, { useState, useMemo } from "react";
-import { FolderMetadata, apiGetFolderStats } from "@/lib/api";
+import { FolderMetadata, UsageInfo, apiGetFolderStats } from "@/lib/api";
 import { toast } from "sonner";
-import { 
-  Folder, 
-  FolderPlus, 
-  ChevronDown, 
-  ChevronRight, 
-  Trash2, 
-  Edit3, 
-  Plus, 
-  Share2, 
-  HardDrive, 
+import {
+  Folder,
+  FolderPlus,
+  ChevronDown,
+  ChevronRight,
+  Trash2,
+  Edit3,
+  Plus,
+  Share2,
+  HardDrive,
   FolderOpen,
   History,
   Loader2
 } from "lucide-react";
+import { StorageMeter } from "./storage-meter";
 
 interface TreeNode {
   folder: FolderMetadata;
@@ -33,6 +34,8 @@ interface FolderSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   sessionToken?: string;
+  usage?: UsageInfo | null;
+  usageLoading?: boolean;
 }
 
 export function FolderSidebar({
@@ -47,6 +50,8 @@ export function FolderSidebar({
   isOpen,
   onClose,
   sessionToken,
+  usage,
+  usageLoading,
 }: FolderSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showNewFolderInput, setShowNewFolderInput] = useState<string | null>(null);
@@ -466,6 +471,9 @@ export function FolderSidebar({
             </div>
           )}
         </div>
+
+        {/* Storage meter — pinned to bottom */}
+        <StorageMeter usage={usage ?? null} loading={usageLoading} />
       </aside>
     </>
   );
