@@ -8,9 +8,12 @@ target/
 
 # Local Environment Variables
 .env
-privault ff/
 
 htmls/
 backend/uploads/
 /uploads
 /thumbnails
+
+a.txt
+
+/.cargo
