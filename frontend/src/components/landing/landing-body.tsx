@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { PlayCircle } from "lucide-react";
 import { useAuth } from "@/app/context";
 import {
   CHALLENGE_STEPS,
@@ -18,6 +19,7 @@ import {
   MagneticButton,
 } from "./motion-primitives";
 import { StrategyCard } from "./strategy-card";
+import { VideoProofModal } from "./video-proof-modal";
 
 export function LandingBody() {
   return (
@@ -121,6 +123,8 @@ function MissionSection() {
 }
 
 function ChallengeSection() {
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
+
   return (
     <section
       id="challenge"
@@ -132,18 +136,18 @@ function ChallengeSection() {
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mb-12 sm:mb-20 max-w-3xl">
           <FadeUp>
-            <p className="text-label text-[#E41613] mb-4">The Challenge</p>
+            <p className="text-label text-[#E41613] mb-4">The Principle</p>
           </FadeUp>
           <FadeUp delay={0.1}>
             <h2 className="font-serif text-3xl md:text-5xl font-light text-white leading-tight">
-              We dare you to{" "}
-              <span className="italic text-[#E41613]">break in.</span>
+              Open. Auditable.{" "}
+              <span className="italic text-[#E41613]">Provable.</span>
             </h2>
           </FadeUp>
           <FadeUp delay={0.2}>
             <p className="mt-6 text-base text-white/40 font-light leading-relaxed max-w-xl">
-              Most security products ask you to trust their word. We&apos;re
-              asking you to try your luck.
+              Most security products ask you to trust their word. We&apos;d
+              rather show you ours.
             </p>
           </FadeUp>
         </div>
@@ -182,18 +186,35 @@ function ChallengeSection() {
             <p className="text-micro text-white/30 mb-6">
               Still not convinced? Every line of code is open for inspection.
             </p>
-            <a
-              href="https://github.com/kru5hna/privault"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-[#E41613] transition-colors font-mono"
-            >
-              <span className="text-micro">GitHub</span>
-              <span className="inline-block text-lg">&rarr;</span>
-            </a>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+              <a
+                href="https://github.com/kru5hna/privault"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-[#E41613] transition-colors font-mono"
+              >
+                <span className="text-micro">GitHub</span>
+                <span className="inline-block text-lg">&rarr;</span>
+              </a>
+              <span className="hidden sm:inline-block w-px h-4 bg-white/10" aria-hidden="true" />
+              <button
+                onClick={() => setIsVideoOpen(true)}
+                className="group inline-flex items-center gap-2 text-sm text-white/60 hover:text-[#E41613] transition-colors font-mono cursor-pointer"
+              >
+                <PlayCircle size={16} className="text-[#E41613] group-hover:scale-110 transition-transform" />
+                <span className="text-micro">Watch the DB proof</span>
+                <span className="inline-block text-lg transition-transform group-hover:translate-x-1">&rarr;</span>
+              </button>
+            </div>
           </div>
         </FadeUp>
       </div>
+
+      <VideoProofModal
+        isOpen={isVideoOpen}
+        onClose={() => setIsVideoOpen(false)}
+        videoSrc="/videos/db-proof.mp4"
+      />
     </section>
   );
 }
