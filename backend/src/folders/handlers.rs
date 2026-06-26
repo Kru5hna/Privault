@@ -7,7 +7,7 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use super::models::FolderMetadata;
-use crate::{auth::AuthSession, error::AppError, AppState};
+use crate::{audit, auth::AuthSession, error::AppError, AppState};
 
 #[derive(Deserialize)]
 pub struct CreateFolderRequest {
@@ -180,6 +180,16 @@ pub async fn delete_folder(
     .bind(session.user_id)
     .execute(&state.db)
     .await?;
+
+    audit::log_event(
+        &state.db,
+        session.user_id,
+        audit::EVENT_DELETED,
+        Some(audit::RESOURCE_FOLDER),
+        Some(folder_id),
+        None,
+        None,
+    ).await;
 
     Ok(Json(serde_json::json!({
         "message": "Folder and contents moved to trash"
