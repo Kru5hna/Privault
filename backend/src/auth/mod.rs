@@ -36,14 +36,45 @@ pub use session::AuthSession;
 /// - `DELETE /sessions`     — revoke all sessions except current
 pub fn router() -> Router<crate::AppState> {
     Router::new()
-        .route("/register", post(handlers::register))
-        .route("/login", post(handlers::login)
-            .route_layer(middleware::from_fn(crate::ratelimit::rate_limit_login)))
+        .route(
+            "/register",
+            post(handlers::register).route_layer(middleware::from_fn(
+                crate::ratelimit::rate_limit_register,
+            )),
+        )
+        .route(
+            "/login",
+            post(handlers::login).route_layer(middleware::from_fn(
+                crate::ratelimit::rate_limit_login,
+            )),
+        )
         .route("/logout", post(handlers::logout))
         .route("/salt/:username", get(handlers::get_salts))
-        .route("/verify-email", get(handlers::verify_email))
-        .route("/change-password", post(handlers::change_password))
+        .route(
+            "/verify-email",
+            get(handlers::verify_email).route_layer(middleware::from_fn(
+                crate::ratelimit::rate_limit_email_verify,
+            )),
+        )
+        .route(
+            "/change-password",
+            post(handlers::change_password).route_layer(middleware::from_fn(
+                crate::ratelimit::rate_limit_change_password,
+            )),
+        )
         .route("/account", delete(handlers::delete_account))
-        .route("/sessions", get(handlers::list_sessions).delete(handlers::revoke_all_sessions))
-        .route("/sessions/:id", delete(handlers::revoke_session))
+        .route(
+            "/sessions",
+            get(handlers::list_sessions)
+                .delete(handlers::revoke_all_sessions)
+                .route_layer(middleware::from_fn(
+                    crate::ratelimit::rate_limit_revoke,
+                )),
+        )
+        .route(
+            "/sessions/:id",
+            delete(handlers::revoke_session).route_layer(middleware::from_fn(
+                crate::ratelimit::rate_limit_revoke,
+            )),
+        )
 }
