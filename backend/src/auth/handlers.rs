@@ -23,10 +23,9 @@ pub async fn register(
     State(state): State<crate::AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, AppError> {
-    // Validate required fields
-    if payload.username.trim().is_empty() {
-        return Err(AppError::BadRequest("Username is required".to_string()));
-    }
+    // Validate required fields + format
+    crate::validation::validate_username(&payload.username)?;
+
     if payload.auth_verifier.trim().is_empty() {
         return Err(AppError::BadRequest("Auth verifier is required".to_string()));
     }
@@ -40,14 +39,8 @@ pub async fn register(
         return Err(AppError::BadRequest("Wrapped key IV is required".to_string()));
     }
 
-    // Validate email
-    let email = payload.email.trim().to_string();
-    if email.is_empty() {
-        return Err(AppError::BadRequest("Email is required".to_string()));
-    }
-    if !email.contains('@') || !email.contains('.') {
-        return Err(AppError::BadRequest("Invalid email address".to_string()));
-    }
+    // Validate email format (normalizes to lowercase)
+    let email = crate::validation::validate_email(&payload.email)?;
 
     // Check for duplicate username (return 409 Conflict, not 400)
     let existing = sqlx::query("SELECT id FROM users WHERE username = $1")
@@ -151,7 +144,6 @@ pub async fn login(
     }
 
     // Find the user
-    tracing::debug!("[LOGIN] Querying DB for user '{}'", payload.username);
     let row = sqlx::query(
         r#"
         SELECT id, username, auth_hash, auth_salt, kek_salt, public_key, wrapped_private_key, wrapped_private_key_iv
@@ -164,10 +156,7 @@ pub async fn login(
     .await?;
 
     let row = match row {
-        Some(r) => {
-            tracing::debug!("[LOGIN] User found in DB");
-            r
-        }
+        Some(r) => r,
         None => {
             tracing::warn!("[LOGIN] User '{}' not found", payload.username);
             return Err(AppError::BadRequest("Invalid username or password".to_string()));
@@ -175,7 +164,6 @@ pub async fn login(
     };
 
     // Verify password
-    tracing::debug!("[LOGIN] Verifying Argon2id hash...");
     let stored_hash: String = row.get("auth_hash");
     let parsed_hash = PasswordHash::new(&stored_hash)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Stored hash parse error: {}", e)))?;
@@ -187,8 +175,6 @@ pub async fn login(
             AppError::BadRequest("Invalid username or password".to_string())
         })?;
 
-    tracing::debug!("[LOGIN] Password verified OK");
-
     // Generate session token
     let mut token_bytes = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut token_bytes);
@@ -199,9 +185,10 @@ pub async fn login(
 
     let token_hash_hex = hash_token(&session_token);
     let user_id: uuid::Uuid = row.get("id");
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
+    // Idle session length (sliding — refreshes on use up to hard cap).
+    let expires_at = chrono::Utc::now() + chrono::Duration::hours(crate::auth::session::SESSION_IDLE_HOURS);
 
-    // Capture IP + User-Agent
+    // Capture IP + User-Agent for fingerprint binding
     let ip_address: Option<String> = headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
@@ -214,12 +201,21 @@ pub async fn login(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    tracing::debug!("[LOGIN] Inserting session into DB (ip={:?}, ua={:?})", ip_address, user_agent);
+    // Build prefix columns for the session-fingerprint check
+    let ip_prefix = ip_address
+        .as_deref()
+        .map(crate::auth::session::ip_prefix);
+    let ua_prefix = user_agent
+        .as_deref()
+        .map(crate::auth::session::ua_prefix);
 
     sqlx::query(
         r#"
-        INSERT INTO sessions (user_id, token_hash, expires_at, ip_address, user_agent)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO sessions (
+            user_id, token_hash, expires_at,
+            ip_address, user_agent, ip_prefix, ua_prefix, last_used_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
         "#,
     )
     .bind(user_id)
@@ -227,14 +223,14 @@ pub async fn login(
     .bind(expires_at)
     .bind(&ip_address)
     .bind(&user_agent)
+    .bind(&ip_prefix)
+    .bind(&ua_prefix)
     .execute(&state.db)
     .await
     .map_err(|e| {
         tracing::error!("[LOGIN] Session INSERT failed: {}", e);
         AppError::Internal(anyhow::anyhow!("Session insert error: {}", e))
     })?;
-
-    tracing::debug!("[LOGIN] Session inserted OK");
 
     let username: String = row.get("username");
     tracing::info!("[LOGIN] SUCCESS — user '{}' ({})", username, user_id);
@@ -375,6 +371,11 @@ pub async fn get_salts(
     State(state): State<crate::AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<SaltResponse>, AppError> {
+    // Validate the path-param username format BEFORE hitting the DB.
+    // Prevents giant usernames being used as a DoS vector against the
+    // lookup query, and surfaces a clean error for malformed input.
+    crate::validation::validate_username(&username)?;
+
     let row = sqlx::query("SELECT auth_salt, kek_salt FROM users WHERE username = $1")
         .bind(&username)
         .fetch_optional(&state.db)
@@ -418,6 +419,21 @@ pub async fn change_password(
     if payload.new_wrapped_private_key_iv.trim().is_empty() {
         return Err(AppError::BadRequest("New wrapped private key IV is required".to_string()));
     }
+
+    // Length bounds — block pathologically short verifiers (brute-force
+    // risk) and oversized blobs (DoS / quota risk).
+    fn check_len(field: &str, value: &str) -> Result<(), AppError> {
+        if value.len() < 32 {
+            return Err(AppError::BadRequest(format!("{} is too short", field)));
+        }
+        if value.len() > 4096 {
+            return Err(AppError::BadRequest(format!("{} is too long", field)));
+        }
+        Ok(())
+    }
+    check_len("current_auth_verifier", &payload.current_auth_verifier)?;
+    check_len("new_auth_verifier", &payload.new_auth_verifier)?;
+    check_len("new_wrapped_private_key", &payload.new_wrapped_private_key)?;
 
     // Fetch current auth_hash to verify the current password
     let row = sqlx::query("SELECT auth_hash FROM users WHERE id = $1")
