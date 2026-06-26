@@ -8,6 +8,7 @@ import {
   Lock,
   CheckCircle2,
   AlertTriangle,
+  Ban,
 } from "lucide-react";
 
 interface BatchUploadState {
@@ -22,6 +23,7 @@ interface BatchUploadPanelProps {
   minimized: boolean;
   onToggleMinimize: () => void;
   onDismiss: () => void;
+  onCancel: () => void;
 }
 
 export const BatchUploadPanel = React.memo(function BatchUploadPanel({
@@ -29,6 +31,7 @@ export const BatchUploadPanel = React.memo(function BatchUploadPanel({
   minimized,
   onToggleMinimize,
   onDismiss,
+  onCancel,
 }: BatchUploadPanelProps) {
   const entries = Object.values(uploads);
   const completed = entries.filter((u) => u.state === "complete").length;
@@ -76,7 +79,16 @@ export const BatchUploadPanel = React.memo(function BatchUploadPanel({
                   </p>
                 )}
               </div>
-              <div className="shrink-0 mt-0.5">
+              <div className="shrink-0 mt-0.5 flex items-center gap-1.5">
+                {(upload.state === "encrypting" || upload.state === "uploading") && (
+                  <button
+                    onClick={onCancel}
+                    title="Cancel upload"
+                    className="text-[#8E929F] hover:text-[#E41613] transition-colors cursor-pointer p-0.5"
+                  >
+                    <Ban size={12} />
+                  </button>
+                )}
                 {upload.state === "encrypting" && (
                   <Lock size={14} className="text-amber-500 animate-pulse" />
                 )}
