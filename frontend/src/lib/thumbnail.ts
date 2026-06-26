@@ -97,17 +97,45 @@ async function enforceCacheLimit(db: IDBDatabase): Promise<void> {
 // Dynamic Script Loader (for pdf.js)
 // ─────────────────────────────────────────────────────────────────────────────
 function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve();
+  const globalWindow = window as any;
+  if (!globalWindow.__scriptPromises) {
+    globalWindow.__scriptPromises = {};
+  }
+  if (globalWindow.__scriptPromises[src]) {
+    return globalWindow.__scriptPromises[src];
+  }
+
+  const existingScript = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement;
+  if (existingScript && existingScript.dataset.loaded === "true") {
+    return Promise.resolve();
+  }
+
+  const promise = new Promise<void>((resolve, reject) => {
+    if (existingScript) {
+      const onScriptLoad = () => {
+        existingScript.dataset.loaded = "true";
+        resolve();
+      };
+      const onScriptError = (err: any) => {
+        reject(err);
+      };
+      existingScript.addEventListener("load", onScriptLoad);
+      existingScript.addEventListener("error", onScriptError);
       return;
     }
+
     const script = document.createElement("script");
     script.src = src;
-    script.onload = () => resolve();
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
     script.onerror = reject;
     document.head.appendChild(script);
   });
+
+  globalWindow.__scriptPromises[src] = promise;
+  return promise;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -261,8 +289,8 @@ function generateVideoThumbnail(bytes: Uint8Array, ext: string): Promise<string>
 
 async function generatePDFThumbnail(bytes: Uint8Array): Promise<string> {
   // Load pdf.js CDN
-  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
-  const pdfjsLib = (window as unknown as Record<string, unknown>)["pdfjs-dist/build/pdf"] as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (params: { data: Uint8Array }) => { promise: Promise<{ getPage: (n: number) => Promise<{ getViewport: (params: { scale: number }) => { width: number; height: number }; render: (params: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<void> } }>; numPages: number }> } };
+  const globalWindow = window as any;
+  const pdfjsLib = (globalWindow.pdfjsLib || globalWindow["pdfjs-dist/build/pdf"]) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (params: { data: Uint8Array }) => { promise: Promise<{ getPage: (n: number) => Promise<{ getViewport: (params: { scale: number }) => { width: number; height: number }; render: (params: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<void> } }>; numPages: number }> } };
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
