@@ -16,9 +16,11 @@ function VerifyEmailContent() {
   useEffect(() => {
     const token = searchParams.get("token");
     if (!token) {
-      setState("error");
-      setMessage("Missing verification token.");
-      return;
+      const timer = setTimeout(() => {
+        setState("error");
+        setMessage("Missing verification token.");
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     let cancelled = false;
