@@ -16,7 +16,7 @@ pub mod session;
 
 use axum::{
     middleware,
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 
@@ -30,6 +30,10 @@ pub use session::AuthSession;
 /// - `POST /login`    — authenticate and receive a session token
 /// - `POST /logout`   — revoke all sessions for the current user
 /// - `GET  /salt/:username` — fetch salts needed for client-side key derivation
+/// - `GET  /verify-email`   — verify email address via token
+/// - `GET  /sessions`       — list all active sessions
+/// - `DELETE /sessions/:id` — revoke a specific session
+/// - `DELETE /sessions`     — revoke all sessions except current
 pub fn router() -> Router<crate::AppState> {
     Router::new()
         .route("/register", post(handlers::register))
@@ -37,4 +41,9 @@ pub fn router() -> Router<crate::AppState> {
             .route_layer(middleware::from_fn(crate::ratelimit::rate_limit_login)))
         .route("/logout", post(handlers::logout))
         .route("/salt/:username", get(handlers::get_salts))
+        .route("/verify-email", get(handlers::verify_email))
+        .route("/change-password", post(handlers::change_password))
+        .route("/account", delete(handlers::delete_account))
+        .route("/sessions", get(handlers::list_sessions).delete(handlers::revoke_all_sessions))
+        .route("/sessions/:id", delete(handlers::revoke_session))
 }
