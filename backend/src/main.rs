@@ -1,3 +1,4 @@
+mod activity;
 mod auth;
 mod audit;
 mod documents;
@@ -109,6 +110,7 @@ async fn main() {
         .route("/api/health", get(health_check))
         .route("/api/me", get(get_me))
         .route("/api/me/usage", get(usage::get_usage))
+        .nest("/api/activity", activity::router())
         .nest("/api/auth", auth::router())
         .nest("/api/recovery", recovery::router())
         .nest("/api/documents", documents::router())
