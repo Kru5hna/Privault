@@ -8,6 +8,14 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(255) UNIQUE NOT NULL,
 
+    -- Required contact & verification fields
+    email VARCHAR(255) UNIQUE NOT NULL,
+    email_verified BOOLEAN NOT NULL DEFAULT false,
+
+    -- Nullable: only populated during an active verification flow
+    email_verification_token VARCHAR(255),
+    email_verification_sent_at TIMESTAMPTZ,
+
     -- Server-side Argon2id hash of the client-derived auth verifier.
     -- The client derives an auth_verifier from (password + auth_salt),
     -- and the server hashes it again with Argon2id before storing.
@@ -57,6 +65,8 @@ CREATE TABLE sessions (
 
 -- 4. Indexes for faster querying
 CREATE INDEX idx_users_username ON users(username);
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_email_verified ON users(email_verified) WHERE email_verified = false;
 CREATE INDEX idx_documents_owner_id ON documents(owner_id);
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX idx_sessions_token_hash ON sessions(token_hash);
