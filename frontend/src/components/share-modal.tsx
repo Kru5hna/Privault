@@ -1,23 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { 
-  DocumentMetadata, 
-  UserSession, 
-  ShareLinkMetadata, 
-  apiCreateShareLink, 
-  apiListMyShareLinks, 
-  apiRevokeShareLink 
+import {
+  DocumentMetadata,
+  UserSession,
+  ShareLinkMetadata,
+  apiCreateShareLink,
+  apiListMyShareLinks,
+  apiRevokeShareLink
 } from "@/lib/api";
 import { encryptDekForSharing, decryptOwnerLinkKey } from "@/lib/crypto";
-import { 
-  X, 
-  Copy, 
-  Check, 
-  Calendar, 
-  Trash2, 
-  Link, 
-  Loader2 
+import {
+  Copy,
+  Check,
+  Calendar,
+  Trash2,
+  Link,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
+import { logActivity } from "@/lib/activity";
+import { Modal } from "@/components/ui/modal";
 
 interface ShareModalProps {
   doc: DocumentMetadata | null;
@@ -121,7 +122,8 @@ export function ShareModal({
       const shareUrl = `${origin}/share/${share.id}#${linkKey}:${permission}`;
       setGeneratedLink(shareUrl);
       toast.success("Cryptographic share link generated!");
-      
+      logActivity(user.userId, "Share created", `Created share link for: ${doc.name}`);
+
       // Reload list
       loadExistingShares();
     } catch (err: unknown) {
@@ -144,6 +146,7 @@ export function ShareModal({
     try {
       await apiRevokeShareLink(user.sessionToken, shareId);
       toast.success("Share link revoked");
+      logActivity(user.userId, "Share revoked", `Revoked share link for: ${doc.name}`);
       loadExistingShares();
       if (generatedLink.includes(shareId)) {
         setGeneratedLink("");
@@ -166,17 +169,21 @@ export function ShareModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      zIndex={150}
+      noPadding
+      data-testid="share-modal"
+    >
       <div className="w-full max-w-lg bg-[#111215] border border-[#1E2026] text-[#F5F5F0] flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="h-14 flex items-center justify-between px-6 border-b border-[#1E2026]">
+        <div className="h-14 flex items-center justify-between px-6 border-b border-[#1E2026] pr-12">
           <div className="flex items-center gap-2">
             <Link size={16} className="text-[#E41613]" />
             <span className="text-xs font-bold tracking-[0.2em] text-white">SHARE DOCUMENT</span>
           </div>
-          <button onClick={onClose} className="p-1 text-[#8E929F] hover:text-white transition-colors cursor-pointer">
-            <X size={18} />
-          </button>
         </div>
 
         {/* Content */}
@@ -425,6 +432,6 @@ export function ShareModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
