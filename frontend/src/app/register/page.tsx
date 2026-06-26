@@ -69,7 +69,7 @@ export default function RegisterPage() {
             Click the link in the email to activate your vault.
           </p>
           <p className="mt-6 text-xs text-white/30">
-            Didn't receive it? Check your spam folder.
+            Didn&apos;t receive it? Check your spam folder.
           </p>
           <button
             onClick={() => router.push("/dashboard")}
