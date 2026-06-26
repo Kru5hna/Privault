@@ -37,6 +37,9 @@ use crate::error::AppError;
 pub struct AuthSession {
     pub user_id: uuid::Uuid,
     pub username: String,
+    /// SHA-256 hash of the raw session token.
+    /// Used to identify the current session in list/revoke operations.
+    pub session_token_hash: String,
 }
 
 /// Hash a raw session token with SHA-256 to produce the DB lookup key.
@@ -45,6 +48,39 @@ pub fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
     hex::encode(hasher.finalize())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_token_deterministic() {
+        let token = "test-token-123";
+        let h1 = hash_token(token);
+        let h2 = hash_token(token);
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn test_hash_token_different_for_different_inputs() {
+        let h1 = hash_token("token-a");
+        let h2 = hash_token("token-b");
+        assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn test_hash_token_is_hex() {
+        let hash = hash_token("anything");
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_hash_token_empty_string() {
+        let hash = hash_token("");
+        assert_eq!(hash.len(), 64);
+    }
 }
 
 #[axum::async_trait]
@@ -93,6 +129,7 @@ impl FromRequestParts<crate::AppState> for AuthSession {
             Some(row) => Ok(AuthSession {
                 user_id: row.get("user_id"),
                 username: row.get("username"),
+                session_token_hash: token_hash,
             }),
             None => Err(AppError::Unauthorized(
                 "Invalid or expired session".to_string(),
