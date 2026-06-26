@@ -752,3 +752,52 @@ export async function apiDeleteFolderDocuments(
   return handleResponse(res);
 }
 
+export interface RecoverResponse {
+  message: string;
+  session_token: string;
+  user_id: string;
+  username: string;
+  recovery_wrapped_key: string;
+  recovery_wrapped_key_iv: string;
+  public_key: string;
+}
+
+/** Recover account using recovery phrase */
+export async function apiRecover(
+  username: string,
+  recoveryPhrase: string
+): Promise<RecoverResponse> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/recovery/recover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username,
+      recovery_phrase: recoveryPhrase,
+    }),
+  });
+  return handleResponse(res);
+}
+
+/** Set new password after successful recovery */
+export async function apiRecoveryChangePassword(
+  token: string,
+  authVerifier: string,
+  authSalt: string,
+  kekSalt: string,
+  wrappedPrivateKey: string,
+  wrappedPrivateKeyIv: string
+): Promise<{ message: string }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/recovery/change-password`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      auth_verifier: authVerifier,
+      auth_salt: authSalt,
+      kek_salt: kekSalt,
+      wrapped_private_key: wrappedPrivateKey,
+      wrapped_private_key_iv: wrappedPrivateKeyIv,
+    }),
+  });
+  return handleResponse(res);
+}
+
