@@ -133,11 +133,11 @@ pub async fn login(
     headers: axum::http::HeaderMap,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
-    tracing::info!("[LOGIN] Attempt for username: '{}'", payload.username.trim());
+    // tracing::info!("[LOGIN] Attempt for username: '{}'", payload.username.trim());
 
     // Validate input
     if payload.username.trim().is_empty() || payload.auth_verifier.trim().is_empty() {
-        tracing::warn!("[LOGIN] Rejected: empty username or auth_verifier");
+        // tracing::warn!("[LOGIN] Rejected: empty username or auth_verifier");
         return Err(AppError::BadRequest(
             "Username and auth verifier are required".to_string(),
         ));
@@ -158,7 +158,7 @@ pub async fn login(
     let row = match row {
         Some(r) => r,
         None => {
-            tracing::warn!("[LOGIN] User '{}' not found", payload.username);
+            // tracing::warn!("[LOGIN] User '{}' not found", payload.username);
             return Err(AppError::BadRequest("Invalid username or password".to_string()));
         }
     };
@@ -171,7 +171,7 @@ pub async fn login(
     Argon2::default()
         .verify_password(payload.auth_verifier.as_bytes(), &parsed_hash)
         .map_err(|_| {
-            tracing::warn!("[LOGIN] Password verification FAILED for '{}'", payload.username);
+            // tracing::warn!("[LOGIN] Password verification FAILED for '{}'", payload.username);
             AppError::BadRequest("Invalid username or password".to_string())
         })?;
 
@@ -228,12 +228,12 @@ pub async fn login(
     .execute(&state.db)
     .await
     .map_err(|e| {
-        tracing::error!("[LOGIN] Session INSERT failed: {}", e);
+        // tracing::error!("[LOGIN] Session INSERT failed: {}", e);
         AppError::Internal(anyhow::anyhow!("Session insert error: {}", e))
     })?;
 
     let username: String = row.get("username");
-    tracing::info!("[LOGIN] SUCCESS — user '{}' ({})", username, user_id);
+    // tracing::info!("[LOGIN] SUCCESS — user '{}' ({})", username, user_id);
 
     audit::log_event(
         &state.db,

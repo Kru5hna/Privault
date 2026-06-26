@@ -287,18 +287,6 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## ✅ Production Checklist
-
-- [x] **Object Storage** — encrypted blobs and thumbnails are stored in AWS S3 (bucket `privault-storage-kru5hna`, region `ap-south-1`). No local filesystem dependency.
-- [ ] **CORS** — restrict `CORS_ORIGIN` to your actual domain
-- [ ] **HTTPS** — Web Crypto API requires a secure context; enforce TLS
-- [ ] **Rate Limiting** — per-IP and per-token limits in place; tune for your traffic profile
-- [ ] **Storage Quotas** — per-user storage caps enforced (default 100 MB)
-- [ ] **Payload Limits** — reverse proxy (nginx/Cloudflare) must match the 100 MB body limit
-- [ ] **SES Production Access** — request production access from sandbox for real-user email delivery
-- [ ] **Rotate secrets** — never commit `.env`; use a secrets manager in deployment
-
----
 
 ## 🗺️ Roadmap
 
