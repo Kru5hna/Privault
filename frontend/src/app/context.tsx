@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   deriveAuthVerifier,
   deriveKEK,
+  deriveRecoveryKEK,
   generateRSAKeyPair,
   exportPublicKey,
   wrapPrivateKey,
@@ -18,6 +19,8 @@ import {
   apiGetMe,
   apiGetSalts,
   apiLogout,
+  apiStoreRecoveryKey,
+  apiGetEmailStatus,
   UserSession,
 } from "@/lib/api";
 
@@ -42,12 +45,14 @@ interface AuthContextType {
   user: UserSession | null;
   privateKey: CryptoKey | null;
   error: string | null;
-  register: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string, email?: string) => Promise<{ email_sent?: boolean }>;
   login: (username: string, password: string) => Promise<void>;
   unlock: (password: string) => Promise<void>;
   logout: () => Promise<void>;
   enterSandbox: () => Promise<void>;
   clearError: () => void;
+  /** Re-fetch /api/me and merge the email verification status into `user`. */
+  refreshEmailStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -79,10 +84,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const session: UserSession = JSON.parse(stored);
 
         // Verify the session token is still valid
-        await apiGetMe(session.sessionToken);
+        const me = await apiGetMe(session.sessionToken);
 
-        // Session is valid — enter locked state
-        setUser(session);
+        // Session is valid — enter locked state. Preserve any stored
+        // verification flags (older sessions may not have them).
+        setUser({
+          ...session,
+          email: me.email ?? session.email ?? null,
+          emailVerified: me.email_verified ?? session.emailVerified ?? false,
+        });
         setStatus("locked");
       } catch (err) {
         console.error("Session restore failed:", err);
@@ -116,14 +126,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     // 6. Build session object (no key material stored!)
+    // Default email fields to "unknown" — they'll be refreshed by
+    // refreshEmailStatus() below, which is best-effort.
     const session: UserSession = {
       sessionToken: response.session_token,
       userId: response.user_id,
       username: response.username,
       publicKey: response.public_key,
+      authSalt: response.auth_salt,
       kekSalt: response.kek_salt,
       wrappedPrivateKey: response.wrapped_private_key,
       wrappedPrivateKeyIv: response.wrapped_private_key_iv,
+      email: null,
+      emailVerified: false,
     };
 
     // 7. Persist session token for session restore
@@ -134,12 +149,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPrivateKey(decryptedPrivateKey);
     setStatus("unlocked");
     router.push("/dashboard");
+
+    // 9. Best-effort fetch of email verification status. Failures
+    //    here must not block login.
+    try {
+      const status = await apiGetEmailStatus(response.session_token);
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              email: status.email ?? null,
+              emailVerified: status.email_verified,
+            }
+          : prev
+      );
+      // Mirror the refreshed state into localStorage so a hard refresh
+      // doesn't lose the verified flag.
+      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (stored) {
+        const parsed: UserSession = JSON.parse(stored);
+        parsed.email = status.email ?? null;
+        parsed.emailVerified = status.email_verified;
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(parsed));
+      }
+    } catch (err) {
+      console.warn("Failed to fetch email verification status", err);
+    }
   }, [router]);
 
+  /**
+   * Re-fetch the email verification status for the current session and
+   * merge the result into the user object. Used by the banner after a user
+   * dismisses it and later verifies, or after returning from /verify-email.
+   */
+  const refreshEmailStatus = useCallback(async () => {
+    if (!user) return;
+    try {
+      const status = await apiGetEmailStatus(user.sessionToken);
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              email: status.email ?? null,
+              emailVerified: status.email_verified,
+            }
+          : prev
+      );
+      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (stored) {
+        const parsed: UserSession = JSON.parse(stored);
+        parsed.email = status.email ?? null;
+        parsed.emailVerified = status.email_verified;
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(parsed));
+      }
+    } catch (err) {
+      console.warn("Failed to refresh email status", err);
+    }
+  }, [user]);
+
   // ── Register ─────────────────────────────────────────────────────────────
-  const register = useCallback(async (username: string, password: string) => {
+  const register = useCallback(async (username: string, password: string, email?: string) => {
     setStatus("loading");
     setError(null);
+    let emailSent = false;
     try {
       // 1. Generate random salts
       const authSalt = generateSalt();
@@ -162,28 +234,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { wrappedKey, iv } = await wrapPrivateKey(keyPair.privateKey, KEK);
 
       // 5. Send everything to the backend
-      await apiRegister(
+      const regResult = await apiRegister(
         username,
         authVerifier,
         authSalt,
         kekSalt,
         publicKeyBase64,
         wrappedKey,
-        iv
+        iv,
+        email
       );
+
+      emailSent = regResult.email_sent ?? false;
 
       // 6. Auto-login after successful registration
       await loginInternal(username, password);
+
+      // 7. Derive recovery KEK from the mnemonic and store the recovery-wrapped key
+      try {
+        const recoveryKEK = await deriveRecoveryKEK(mnemonic);
+        const { wrappedKey: recoveryWrappedKey, iv: recoveryWrappedKeyIv } =
+          await wrapPrivateKey(keyPair.privateKey, recoveryKEK);
+        const storedSession = localStorage.getItem("privault_session");
+        if (storedSession) {
+          const session = JSON.parse(storedSession);
+          await apiStoreRecoveryKey(session.sessionToken, recoveryWrappedKey, recoveryWrappedKeyIv);
+        }
+      } catch (recoveryErr) {
+        console.error("Failed to store recovery key (non-fatal):", recoveryErr);
+      }
     } catch (err: unknown) {
       console.error("Registration failed:", err);
+      sessionStorage.removeItem("privault_mnemonic_temp");
+      sessionStorage.removeItem("privault_show_recovery");
       const message = err instanceof Error ? err.message : "Registration failed";
       setError(message);
       setStatus("unauthenticated");
       throw err;
     }
+    return { email_sent: emailSent };
   }, [loginInternal]);
 
   const login = useCallback(async (username: string, password: string) => {
+    sessionStorage.removeItem("privault_mnemonic_temp");
+    sessionStorage.removeItem("privault_show_recovery");
     setStatus("loading");
     setError(null);
     try {
@@ -252,6 +346,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userId: "sandbox-user-id",
         username: "sandbox-visitor",
         publicKey: "",
+        authSalt: "",
         kekSalt: "",
         wrappedPrivateKey: "",
         wrappedPrivateKeyIv: "",
@@ -282,6 +377,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         enterSandbox,
         clearError,
+        refreshEmailStatus,
       }}
     >
       {children}
