@@ -19,6 +19,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { logActivity } from "@/lib/activity";
 
 interface SharedLinksPanelProps {
   user: UserSession | null;
@@ -63,8 +64,14 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
   const handleRevoke = async (shareId: string) => {
     if (!user) return;
     try {
+      const target = shares.find((s) => s.id === shareId);
       await apiRevokeShareLink(user.sessionToken, shareId);
       toast.success("Share link revoked successfully.");
+      logActivity(
+        user.userId,
+        "Share revoked",
+        `Revoked share link for: ${target?.document_name ?? shareId}`
+      );
       loadShares();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
