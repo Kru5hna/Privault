@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/context";
 import {
   apiListDocuments,
@@ -17,14 +17,20 @@ import {
   apiCreateTag,
   apiTagDocument,
   apiGetFolderStats,
+  apiChangePassword,
+  apiDeleteAccount,
+  apiGetUsage,
+  UsageInfo,
   DocumentMetadata,
   FolderMetadata,
   TagMetadata,
 } from "@/lib/api";
-import { encryptFile, decryptFile, getPublicKeyFromPrivateKey } from "@/lib/crypto";
+import { encryptFile, decryptFile, getPublicKeyFromPrivateKey, deriveAuthVerifier, deriveKEK, generateSalt, wrapPrivateKey } from "@/lib/crypto";
 import { encryptFileInWorker, decryptFileInWorker } from "@/lib/crypto-worker";
 import { useDebounce } from "@/lib/use-debounce";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { VerifyEmailBanner } from "@/components/dashboard/verify-email-banner";
+import { SettingsModal } from "@/components/settings-modal";
 import { UploadZone } from "@/components/dashboard/upload-zone";
 import { DocumentsTable } from "@/components/dashboard/documents-table";
 import { BatchUploadPanel } from "@/components/dashboard/batch-upload-panel";
@@ -36,8 +42,12 @@ import { SharedLinksPanel } from "@/components/shared-links-panel";
 import { TrashPanel } from "@/components/trash-panel";
 import { ActivityLogPanel } from "@/components/activity-log-panel";
 import { RecoveryPhraseModal } from "@/components/recovery-phrase-modal";
+import { ChangePasswordModal } from "@/components/change-password-modal";
+import { DeleteConfirmModal } from "@/components/delete-confirm-modal";
+import { SessionManagementModal } from "@/components/session-management-modal";
+import { Modal } from "@/components/ui/modal";
 import { logActivity } from "@/lib/activity";
-import { Menu, X, AlertTriangle, Settings } from "lucide-react";
+import { Menu, X, AlertTriangle, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
 interface SandboxDocument extends DocumentMetadata {
@@ -77,6 +87,10 @@ export default function DashboardPage() {
   const [trashTagId, setTrashTagId] = useState<string | null>(null);
   const [loadingDocs, setLoadingDocs] = useState(true);
 
+  // ── Storage usage state (for sidebar meter) ──
+  const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+
   // ── UI state ──
   const [viewMode, setViewMode] = useState<"vault" | "shares" | "trash" | "activity">("vault");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -98,16 +112,36 @@ export default function DashboardPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [batchUploads, setBatchUploads] = useState<Record<string, { name: string; size: number; state: "encrypting" | "uploading" | "complete" | "failed"; error?: string }>>({});
   const [panelMinimized, setPanelMinimized] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const dragCounter = useRef(0);
+
+  const handleCancelUpload = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setUploadState("idle");
+    setUploadError(null);
+    setBatchUploads({});
+  }, []);
 
   // ── Modal state ──
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [recoveryMnemonic, setRecoveryMnemonic] = useState("");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
   const [duplicateFilePrompt, setDuplicateFilePrompt] = useState<{
     fileName: string;
     existingId: string;
     onResolve: (action: "overwrite" | "keep-both" | "skip") => void;
   } | null>(null);
+  const [oversizedFiles, setOversizedFiles] = useState<{ name: string; size: number }[]>([]);
+  const [showSizeLimitModal, setShowSizeLimitModal] = useState(false);
 
   // ── Sandbox state ──
   const [demoDocs, setDemoDocs] = useState<SandboxDocument[]>([]);
@@ -202,10 +236,29 @@ export default function DashboardPage() {
     }
   }, [user, privateKey, currentFolderId]);
 
+  // ── Storage usage (sidebar meter) ──
+  const refreshUsage = useCallback(async () => {
+    if (!user) return;
+    setUsageLoading(true);
+    try {
+      const info = await apiGetUsage(user.sessionToken);
+      setUsage(info);
+    } catch (err) {
+      console.warn("Failed to fetch usage", err);
+    } finally {
+      setUsageLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshUsage();
+  }, [refreshUsage]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -236,6 +289,67 @@ export default function DashboardPage() {
       cancel: { label: "Stay", onClick: () => {} },
     });
   }, [logout]);
+
+  // ── Change Password ──
+  const handleChangePassword = useCallback(async (
+    currentPassword: string,
+    newPassword: string,
+  ) => {
+    if (!user || !privateKey) return;
+    setChangePasswordLoading(true);
+    try {
+      const newAuthSalt = generateSalt();
+      const newKekSalt = generateSalt();
+
+      const currentAuthVerifier = await deriveAuthVerifier(currentPassword, user.authSalt);
+      const newAuthVerifier = await deriveAuthVerifier(newPassword, newAuthSalt);
+      const newKEK = await deriveKEK(newPassword, newKekSalt);
+
+      const { wrappedKey, iv } = await wrapPrivateKey(privateKey, newKEK);
+
+      await apiChangePassword(
+        user.sessionToken,
+        currentAuthVerifier,
+        newAuthVerifier,
+        newAuthSalt,
+        newKekSalt,
+        wrappedKey,
+        iv,
+      );
+
+      const updatedSession = {
+        ...user,
+        kekSalt: newKekSalt,
+        wrappedPrivateKey: wrappedKey,
+        wrappedPrivateKeyIv: iv,
+      };
+      localStorage.setItem("privault_session", JSON.stringify(updatedSession));
+
+      toast.success("Master password changed successfully");
+      setShowChangePasswordModal(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to change password";
+      toast.error(msg);
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  }, [user, privateKey]);
+
+  // ── Delete Account ──
+  const handleDeleteAccount = useCallback(async () => {
+    if (!user) return;
+    setDeleteAccountLoading(true);
+    try {
+      await apiDeleteAccount(user.sessionToken);
+      toast.success("Account deleted permanently");
+      setShowDeleteConfirmModal(false);
+      logout();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete account";
+      toast.error(msg);
+      setDeleteAccountLoading(false);
+    }
+  }, [user, logout]);
 
   // ── Derived Data ──
   const displayedDocs = useMemo(
@@ -274,6 +388,7 @@ export default function DashboardPage() {
         ? await decryptFileInWorker(ciphertext, doc.encrypted_dek, privateKey)
         : await decryptFile(ciphertext, doc.encrypted_dek, privateKey);
       setPreviewBytes(decryptedBytes);
+      logActivity(user.userId, "Preview", `Previewed file: ${doc.name}`);
     } catch (err: unknown) {
       toast.error(`Preview failed: ${err instanceof Error ? err.message : "Unknown"}`);
       setPreviewDoc(null);
@@ -356,10 +471,36 @@ export default function DashboardPage() {
 
   // ── Upload Logic ──
 
+  const MAX_FILE_SIZE = 104_857_600; // 100 MB
+
+  const filterOversizedFiles = (files: File[]): { valid: File[]; oversized: { name: string; size: number }[] } => {
+    const oversized: { name: string; size: number }[] = [];
+    const valid: File[] = [];
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        oversized.push({ name: file.name, size: file.size });
+      } else {
+        valid.push(file);
+      }
+    }
+    return { valid, oversized };
+  };
+
+  const formatSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleUploadQueue = async (uploadQueue: { file: File; relativePath: string }[]) => {
     if (!user || !privateKey) return;
     setUploadError(null);
     setPanelMinimized(false);
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const signal = controller.signal;
 
     const initialUploads: Record<string, { name: string; size: number; state: "encrypting" | "uploading" | "complete" | "failed"; error?: string }> = {};
     uploadQueue.forEach((item) => {
@@ -377,8 +518,10 @@ export default function DashboardPage() {
 
       const uploadWorker = async (item: { file: File; relativePath: string }) => {
         const { file, relativePath } = item;
+        if (signal.aborted) return;
         try {
           const targetFolderId = await getOrCreateFoldersInPath(relativePath, currentFolderId);
+          if (signal.aborted) return;
           const existingDocs = isSandbox ? demoDocs : documents;
           const duplicate = existingDocs.find((d) => d.name === file.name && d.folder_id === targetFolderId);
           let uploadName = file.name;
@@ -403,6 +546,8 @@ export default function DashboardPage() {
             }
           }
 
+          if (signal.aborted) return;
+
           const fileBytes = new Uint8Array(await file.arrayBuffer());
           let ciphertext: Uint8Array;
           let encryptedDek: string;
@@ -417,6 +562,8 @@ export default function DashboardPage() {
             ciphertext = result.ciphertext;
             encryptedDek = result.encryptedDek;
           }
+
+          if (signal.aborted) return;
 
           setBatchUploads((prev) => ({
             ...prev,
@@ -444,8 +591,10 @@ export default function DashboardPage() {
               await apiDeleteDocument(user.sessionToken, duplicate.id);
             }
             const blob = new Blob([ciphertext as unknown as BlobPart], { type: "application/octet-stream" });
-            await apiUploadDocument(user.sessionToken, blob, uploadName, encryptedDek, targetFolderId);
+            await apiUploadDocument(user.sessionToken, blob, uploadName, encryptedDek, targetFolderId, signal);
           }
+
+          if (signal.aborted) return;
 
           setBatchUploads((prev) => ({
             ...prev,
@@ -453,6 +602,7 @@ export default function DashboardPage() {
           }));
           logActivity(user.userId, "Upload", `Uploaded encrypted file: ${uploadName}`);
         } catch (err: unknown) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
           const errorMsg = err instanceof Error ? err.message : "Upload failed";
           setBatchUploads((prev) => ({
             ...prev,
@@ -462,7 +612,14 @@ export default function DashboardPage() {
       };
 
       for (const item of uploadQueue) {
-        await uploadWorker(item).catch((err) => console.error("Upload failure", err));
+        if (signal.aborted) break;
+        await uploadWorker(item).catch(() => {});
+      }
+
+      if (signal.aborted) {
+        setUploadState("idle");
+        setBatchUploads({});
+        return;
       }
 
       setUploadState("complete");
@@ -478,17 +635,32 @@ export default function DashboardPage() {
           setDocuments(docs);
         } catch {}
       }
+      refreshUsage();
     }
   };
 
   const handleMultipleFilesUpload = async (files: FileList | File[]) => {
-    const queue = Array.from(files).map((file) => ({ file, relativePath: file.name }));
+    const fileArray = Array.from(files);
+    const { valid, oversized } = filterOversizedFiles(fileArray);
+    if (oversized.length > 0) {
+      setOversizedFiles(oversized);
+      setShowSizeLimitModal(true);
+      if (valid.length === 0) return;
+    }
+    const queue = valid.map((file) => ({ file, relativePath: file.name }));
     await handleUploadQueue(queue);
   };
 
   const onFolderSelectChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const queue = Array.from(e.target.files).map((file) => ({
+      const fileArray = Array.from(e.target.files);
+      const { valid, oversized } = filterOversizedFiles(fileArray);
+      if (oversized.length > 0) {
+        setOversizedFiles(oversized);
+        setShowSizeLimitModal(true);
+        if (valid.length === 0) return;
+      }
+      const queue = valid.map((file) => ({
         file,
         relativePath: file.webkitRelativePath || file.name,
       }));
@@ -519,6 +691,7 @@ export default function DashboardPage() {
         setFolderPath([{ id: null, name: "Root" }]);
       }
       setAllFolders(await apiListAllFolders(user.sessionToken));
+      refreshUsage();
       toast.success("Folder deleted securely");
     } catch (err: unknown) {
       toast.error(`Delete failed: ${err instanceof Error ? err.message : "Unknown"}`);
@@ -572,6 +745,7 @@ export default function DashboardPage() {
       link.click();
       link.parentNode?.removeChild(link);
       window.URL.revokeObjectURL(url);
+      logActivity(user.userId, "Download", `Downloaded decrypted file: ${doc.name}`);
     } catch (err: unknown) {
       toast.error(`Decryption failed: ${err instanceof Error ? err.message : "Unknown"}`);
     }
@@ -601,6 +775,7 @@ export default function DashboardPage() {
               setDocuments(await apiListDocuments(user.sessionToken, currentFolderId));
               toast.success(`Deleted ${count} files`);
             }
+            refreshUsage();
           } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : "Failed to delete all files");
           } finally {
@@ -643,6 +818,7 @@ export default function DashboardPage() {
               } catch {}
               toast.success("Document moved to Recycle Bin");
             }
+            refreshUsage();
             logActivity(user.userId, "Delete", `Moved document to Recycle Bin: ${docName}`);
           } catch (err: unknown) {
             toast.error(`Failed to delete: ${err instanceof Error ? err.message : "Unknown"}`);
@@ -657,12 +833,24 @@ export default function DashboardPage() {
   };
 
   // ── Drag & Drop ──
-
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  const handleDragEnter = (e: React.DragEvent) => { e.preventDefault(); setIsDragActive(true); };
-  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragActive(false); };
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragActive(true);
+    }
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragActive(false);
+    }
+  };
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    dragCounter.current = 0;
     setIsDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleMultipleFilesUpload(e.dataTransfer.files);
@@ -676,8 +864,29 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#0D0E10] text-[#F5F5F0] dotted-grid-dark relative overflow-x-hidden w-full">
+    <div
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      className="flex min-h-screen bg-[#0D0E10] text-[#F5F5F0] dotted-grid-dark relative overflow-x-hidden w-full"
+    >
       <div className="noise-overlay absolute inset-0 pointer-events-none opacity-20" />
+
+      {/* Fullscreen Drag Overlay */}
+      {isDragActive && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0D0E10]/90 backdrop-blur-md border-[2px] border-dashed border-[#E41613] m-4 pointer-events-none">
+          <div className="flex flex-col items-center gap-4 animate-bounce text-center p-6">
+            <UploadCloud size={64} className="text-[#E41613] mb-2" />
+            <p className="text-lg font-bold uppercase tracking-[0.2em] text-white">
+              Drag & drop files or folders anywhere
+            </p>
+            <p className="text-xs text-[#8E929F] tracking-widest uppercase">
+              Files are AES-256-GCM encrypted in your browser before leaving your machine
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Sidebar Toggler */}
       <button
@@ -704,6 +913,8 @@ export default function DashboardPage() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         sessionToken={user?.sessionToken}
+        usage={usage}
+        usageLoading={usageLoading}
       />
 
       <div className={`flex-1 flex flex-col min-w-0 min-h-screen transition-[padding] duration-300 ${sidebarOpen ? "md:pl-64" : "md:pl-0"}`}>
@@ -713,6 +924,8 @@ export default function DashboardPage() {
           onOpenSettings={() => setShowSettingsModal(true)}
           onLogout={handleLogout}
         />
+
+        <VerifyEmailBanner />
 
         {viewMode === "vault" && (
           <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
@@ -768,6 +981,7 @@ export default function DashboardPage() {
               onDrop={handleDrop}
               onFilesSelected={(files) => handleMultipleFilesUpload(files)}
               onFolderSelect={onFolderSelectChange}
+              onCancel={handleCancelUpload}
             />
 
             <section className="panel-card p-4 sm:p-8">
@@ -840,7 +1054,10 @@ export default function DashboardPage() {
               documents={isSandbox ? demoDocs : documents}
               docTagsCache={docTagsCache}
               isSandbox={isSandbox}
-              onRefresh={loadData}
+              onRefresh={async () => {
+                await loadData();
+                await refreshUsage();
+              }}
               trashTagId={trashTagId}
               setDemoDocs={setDemoDocs}
             />
@@ -892,6 +1109,7 @@ export default function DashboardPage() {
           minimized={panelMinimized}
           onToggleMinimize={() => setPanelMinimized((prev) => !prev)}
           onDismiss={() => setBatchUploads({})}
+          onCancel={handleCancelUpload}
         />
       )}
 
@@ -903,9 +1121,53 @@ export default function DashboardPage() {
         username={user?.username || ""}
       />
 
+      {/* File Size Limit Modal */}
+      <Modal
+        isOpen={showSizeLimitModal && oversizedFiles.length > 0}
+        onClose={() => setShowSizeLimitModal(false)}
+        size="md"
+        zIndex={170}
+        showCloseButton={false}
+        data-testid="size-limit-modal"
+      >
+        <div className="w-full max-w-md bg-[#111215] border border-white/10 p-6 sm:p-8 rounded">
+          <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
+            <AlertTriangle size={24} />
+          </div>
+          <h3 className="font-serif text-base font-bold text-white mb-2 text-center uppercase tracking-wide">
+            File{oversizedFiles.length > 1 ? "s" : ""} Exceed{oversizedFiles.length === 1 ? "s" : ""} Limit
+          </h3>
+          <p className="text-xs text-[#8E929F] mb-5 text-center leading-relaxed">
+            The following file{oversizedFiles.length > 1 ? "s" : ""} exceed{oversizedFiles.length === 1 ? "s" : ""} the{" "}
+            <span className="text-white font-semibold">100 MB</span> upload limit and cannot be uploaded.
+          </p>
+          <div className="space-y-2 mb-6 max-h-40 overflow-y-auto custom-scrollbar">
+            {oversizedFiles.map((f) => (
+              <div key={f.name} className="flex items-center justify-between bg-[#15161A] border border-white/5 px-3 py-2">
+                <span className="text-xs text-white/80 truncate font-mono">{f.name}</span>
+                <span className="text-[11px] text-[#E41613] font-semibold shrink-0 ml-3">{formatSize(f.size)}</span>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowSizeLimitModal(false)}
+            className="w-full py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors hover:bg-[#c31310] cursor-pointer"
+          >
+            Got It
+          </button>
+        </div>
+      </Modal>
+
       {/* Duplicate Resolution Modal */}
-      {duplicateFilePrompt && (
-        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/85 backdrop-blur-xs px-4">
+      <Modal
+        isOpen={duplicateFilePrompt !== null}
+        onClose={() => duplicateFilePrompt?.onResolve("skip")}
+        size="md"
+        zIndex={170}
+        showCloseButton={false}
+        data-testid="duplicate-file-modal"
+      >
+        {duplicateFilePrompt && (
           <div className="w-full max-w-md bg-[#111215] border border-white/10 p-6 sm:p-8 rounded text-center">
             <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
               <AlertTriangle size={24} />
@@ -931,74 +1193,58 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Account Settings Modal */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 backdrop-blur-md px-4">
-          <div className="w-full h-auto max-w-xl bg-[#111215] border border-white/10 p-6 sm:p-8 rounded relative shadow-2xl font-sans">
-            <button onClick={() => setShowSettingsModal(false)}
-              className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors cursor-pointer">
-              <X size={18} />
-            </button>
-            <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
-              <Settings size={20} className="text-[#E41613]" />
-              <h2 className="font-serif text-lg font-bold text-white uppercase tracking-wider">Account Settings</h2>
-            </div>
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-2">
-                  <span className="h-3 w-1 bg-[#E41613]" />Secure Identity
-                </h4>
-                <div className="grid grid-cols-3 gap-2 text-xs border border-white/5 p-4 bg-[#15161A]/40">
-                  <span className="text-white/40">Username</span>
-                  <span className="col-span-2 text-white font-mono font-medium">{user?.username}</span>
-                  <span className="text-white/40">User UUID</span>
-                  <span className="col-span-2 text-white font-mono break-all text-[11px]">{user?.userId}</span>
-                  <span className="text-white/40">Encryption</span>
-                  <span className="col-span-2 text-green-400 font-semibold uppercase text-[10px]">RSA-2048 + AES-256-GCM</span>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-2">
-                  <span className="h-3 w-1 bg-[#E41613]" />Security Actions
-                </h4>
-                <div className="divide-y divide-white/5 border border-white/5">
-                  <button onClick={() => { setShowSettingsModal(false); setShowRecoveryModal(true); }}
-                    className="w-full flex items-center justify-between px-4 py-3 text-xs text-left hover:bg-[#1E2026] transition-colors cursor-pointer group">
-                    <span className="text-white/70 group-hover:text-white">View Recovery Phrase</span>
-                    <span className="text-[10px] text-[#8E929F] group-hover:text-[#E41613]">&rarr;</span>
-                  </button>
-                  <div className="flex items-center justify-between px-4 py-3 text-xs opacity-50 cursor-not-allowed">
-                    <span className="text-white/50">Change Master Password</span>
-                    <span className="text-[9px] text-amber-500 uppercase tracking-wider">Phase 2</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 text-xs opacity-50 cursor-not-allowed">
-                    <span className="text-white/50">Session Management</span>
-                    <span className="text-[9px] text-amber-500 uppercase tracking-wider">Phase 2</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 text-xs opacity-50 cursor-not-allowed">
-                    <span className="text-white/50">Delete Account</span>
-                    <span className="text-[9px] text-amber-500 uppercase tracking-wider">Phase 2</span>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-bold text-[#8E929F] uppercase tracking-widest">RSA Public Key (SPKI)</h4>
-                <div className="bg-black/40 border border-white/5 p-3 rounded-sm font-mono text-[9px] text-white/50 break-all select-all leading-normal max-h-16 overflow-y-auto custom-scrollbar">
-                  {user?.publicKey}
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6 border-t border-white/5 pt-4">
-              <button onClick={() => setShowSettingsModal(false)}
-                className="py-2 px-4 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors hover:bg-white/10 cursor-pointer">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        user={user}
+        onOpenRecoveryPhrase={() => {
+          setShowSettingsModal(false);
+          setShowRecoveryModal(true);
+        }}
+        onOpenChangePassword={() => {
+          setShowSettingsModal(false);
+          setShowChangePasswordModal(true);
+        }}
+        onOpenSessionManagement={() => {
+          setShowSettingsModal(false);
+          setShowSessionModal(true);
+        }}
+        onOpenDeleteAccount={() => {
+          setShowSettingsModal(false);
+          setShowDeleteConfirmModal(true);
+        }}
+      />
+
+      {/* Session Management Modal */}
+      <SessionManagementModal
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        sessionToken={user?.sessionToken || ""}
+      />
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && (
+        <ChangePasswordModal
+          onClose={() => setShowChangePasswordModal(false)}
+          onSubmit={handleChangePassword}
+          loading={changePasswordLoading}
+        />
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirmModal && (
+        <DeleteConfirmModal
+          username={user?.username ?? ""}
+          confirmText={deleteConfirmText}
+          onConfirmTextChange={setDeleteConfirmText}
+          onConfirm={handleDeleteAccount}
+          onClose={() => { setShowDeleteConfirmModal(false); setDeleteConfirmText(""); }}
+          loading={deleteAccountLoading}
+        />
       )}
     </div>
   );
