@@ -1,24 +1,25 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  ActivityLogEntry, 
-  getActivityLogs, 
-  clearActivityLogs 
+import {
+  ActivityLogEntry,
+  getActivityLogs,
+  clearActivityLogs
 } from "@/lib/activity";
-import { 
-  History, 
-  Upload, 
-  Download, 
-  Eye, 
-  Link2, 
-  Trash2, 
-  RefreshCw, 
+import {
+  History,
+  Upload,
+  Download,
+  Eye,
+  Link2,
+  Trash2,
+  RefreshCw,
   Calendar,
   XCircle,
   FileKey
 } from "lucide-react";
 import { toast } from "sonner";
+import { Modal } from "@/components/ui/modal";
 
 interface ActivityLogPanelProps {
   userId: string;
@@ -166,35 +167,40 @@ export function ActivityLogPanel({ userId }: ActivityLogPanelProps) {
       )}
 
       {/* Confirmation Modal: Clear Logs */}
-      {confirmClear && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/85 backdrop-blur-xs px-4">
-          <div className="w-full max-w-sm bg-[#111215] border border-red-500/20 p-6 rounded text-center">
-            <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
-              <History size={24} />
-            </div>
-            <h3 className="font-serif text-base font-bold text-white mb-2 uppercase tracking-wide">
-              Clear Logs
-            </h3>
-            <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
-              Are you sure you want to clear your local activity history? This will clear logs stored on this device only.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleClearLogs}
-                className="flex-1 py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer"
-              >
-                Clear History
-              </button>
-              <button
-                onClick={() => setConfirmClear(false)}
-                className="flex-1 py-2.5 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
+      <Modal
+        isOpen={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        size="sm"
+        zIndex={160}
+        showCloseButton={false}
+        data-testid="clear-logs-confirm-modal"
+      >
+        <div className="w-full max-w-sm bg-[#111215] border border-red-500/20 p-6 rounded text-center">
+          <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
+            <History size={24} />
+          </div>
+          <h3 className="font-serif text-base font-bold text-white mb-2 uppercase tracking-wide">
+            Clear Logs
+          </h3>
+          <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
+            Are you sure you want to clear your local activity history? This will clear logs stored on this device only.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={handleClearLogs}
+              className="flex-1 py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer"
+            >
+              Clear History
+            </button>
+            <button
+              onClick={() => setConfirmClear(false)}
+              className="flex-1 py-2.5 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer hover:bg-white/10"
+            >
+              Cancel
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
