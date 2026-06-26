@@ -1,16 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  DocumentMetadata, 
-  UserSession, 
-  TagMetadata, 
-  apiDeleteDocument, 
-  apiUntagDocument 
+import {
+  DocumentMetadata,
+  UserSession,
+  TagMetadata,
+  apiDeleteDocument,
+  apiUntagDocument
 } from "@/lib/api";
 import { Trash2, RotateCcw, ShieldAlert, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activity";
+import { Modal } from "@/components/ui/modal";
 
 interface TrashPanelProps {
   user: UserSession;
@@ -199,66 +200,76 @@ export function TrashPanel({
       )}
 
       {/* Confirmation Modal: Empty Trash */}
-      {confirmEmpty && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/85 backdrop-blur-xs px-4">
-          <div className="w-full max-w-sm bg-[#111215] border border-red-500/20 p-6 rounded text-center">
-            <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
-              <ShieldAlert size={24} />
-            </div>
-            <h3 className="font-serif text-base font-bold text-white mb-2 uppercase tracking-wide">
-              Confirm Purge
-            </h3>
-            <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
-              Are you sure you want to permanently delete all {trashedDocs.length} documents from storage? This action is irreversible.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleEmptyTrash}
-                className="flex-1 py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer"
-              >
-                Permanently Purge All
-              </button>
-              <button
-                onClick={() => setConfirmEmpty(false)}
-                className="flex-1 py-2.5 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
+      <Modal
+        isOpen={confirmEmpty}
+        onClose={() => setConfirmEmpty(false)}
+        size="sm"
+        zIndex={160}
+        showCloseButton={false}
+        data-testid="empty-trash-confirm-modal"
+      >
+        <div className="w-full max-w-sm bg-[#111215] border border-red-500/20 p-6 rounded text-center">
+          <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
+            <ShieldAlert size={24} />
+          </div>
+          <h3 className="font-serif text-base font-bold text-white mb-2 uppercase tracking-wide">
+            Confirm Purge
+          </h3>
+          <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
+            Are you sure you want to permanently delete all {trashedDocs.length} documents from storage? This action is irreversible.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={handleEmptyTrash}
+              className="flex-1 py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer"
+            >
+              Permanently Purge All
+            </button>
+            <button
+              onClick={() => setConfirmEmpty(false)}
+              className="flex-1 py-2.5 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer hover:bg-white/10"
+            >
+              Cancel
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Confirmation Modal: Single Permanent Delete */}
-      {confirmDeleteDoc && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/85 backdrop-blur-xs px-4">
-          <div className="w-full max-w-sm bg-[#111215] border border-red-500/20 p-6 rounded text-center">
-            <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
-              <AlertTriangle size={24} />
-            </div>
-            <h3 className="font-serif text-base font-bold text-white mb-2 uppercase tracking-wide">
-              Permanent Deletion
-            </h3>
-            <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
-              Are you sure you want to permanently delete <span className="text-white font-semibold">&quot;{confirmDeleteDoc.name}&quot;</span>? There is no way to recover this file.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handlePermanentDelete(confirmDeleteDoc)}
-                className="flex-1 py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer"
-              >
-                Confirm Delete
-              </button>
-              <button
-                onClick={() => setConfirmDeleteDoc(null)}
-                className="flex-1 py-2.5 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
+      <Modal
+        isOpen={confirmDeleteDoc !== null}
+        onClose={() => setConfirmDeleteDoc(null)}
+        size="sm"
+        zIndex={160}
+        showCloseButton={false}
+        data-testid="trash-delete-confirm-modal"
+      >
+        <div className="w-full max-w-sm bg-[#111215] border border-red-500/20 p-6 rounded text-center">
+          <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-[#E41613]/10 border border-[#E41613]/20 mb-4 text-[#E41613]">
+            <AlertTriangle size={24} />
+          </div>
+          <h3 className="font-serif text-base font-bold text-white mb-2 uppercase tracking-wide">
+            Permanent Deletion
+          </h3>
+          <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
+            Are you sure you want to permanently delete <span className="text-white font-semibold">&quot;{confirmDeleteDoc?.name}&quot;</span>? There is no way to recover this file.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => confirmDeleteDoc && handlePermanentDelete(confirmDeleteDoc)}
+              className="flex-1 py-2.5 bg-[#E41613] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer"
+            >
+              Confirm Delete
+            </button>
+            <button
+              onClick={() => setConfirmDeleteDoc(null)}
+              className="flex-1 py-2.5 bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors cursor-pointer hover:bg-white/10"
+            >
+              Cancel
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
