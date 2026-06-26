@@ -78,7 +78,12 @@ export function SessionManagementModal({
   }, [sessionToken]);
 
   useEffect(() => {
-    if (isOpen) loadSessions();
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        void loadSessions();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
   }, [isOpen, loadSessions]);
 
   const handleRevoke = async (id: string) => {
