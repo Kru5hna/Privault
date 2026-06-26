@@ -62,6 +62,12 @@ SAFETY INSTRUCTIONS:
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
+    const escapedUsername = username
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
     printWindow.document.write(`
       <html>
         <head>
@@ -82,7 +88,7 @@ SAFETY INSTRUCTIONS:
         <body>
           <h1>PRIVAULT RECOVERY PHRASE</h1>
           <div class="meta">
-            <strong>Vault Owner:</strong> ${username}<br/>
+            <strong>Vault Owner:</strong> ${escapedUsername}<br/>
             <strong>Generated At:</strong> ${new Date().toLocaleString()}
           </div>
           <div class="grid">
