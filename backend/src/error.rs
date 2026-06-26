@@ -52,3 +52,58 @@ where
         Self::Internal(err.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bad_request_message() {
+        let err = AppError::BadRequest("invalid input".into());
+        let msg = match err {
+            AppError::BadRequest(m) => m,
+            _ => panic!("wrong variant"),
+        };
+        assert_eq!(msg, "invalid input");
+    }
+
+    #[test]
+    fn test_unauthorized_message() {
+        let err = AppError::Unauthorized("bad token".into());
+        if let AppError::Unauthorized(m) = err {
+            assert_eq!(m, "bad token");
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn test_not_found_message() {
+        let err = AppError::NotFound("missing".into());
+        if let AppError::NotFound(m) = err {
+            assert_eq!(m, "missing");
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn test_conflict_message() {
+        let err = AppError::Conflict("duplicate".into());
+        if let AppError::Conflict(m) = err {
+            assert_eq!(m, "duplicate");
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn test_from_sqlx_error() {
+        let sqlx_err = sqlx::Error::Protocol("test".into());
+        let app_err: AppError = sqlx_err.into();
+        match app_err {
+            AppError::Internal(_) => {}, // expected
+            _ => panic!("expected Internal variant"),
+        }
+    }
+}
