@@ -114,6 +114,10 @@ pub async fn upload_document(
         ));
     }
 
+    // Validate filename format — length cap + reject path separators
+    // and control characters. Matches the check used in upload_folder.
+    crate::validation::validate_filename(&name)?;
+
     validate_mime_type(&mime_type)?;
 
     // Check storage quota
@@ -848,9 +852,9 @@ pub async fn upload_folder(
         if filename.is_empty() {
             return Err(AppError::BadRequest("Empty filename in relative_path".to_string()));
         }
-        if filename.len() > 255 {
-            return Err(AppError::BadRequest("Filename exceeds 255 characters".to_string()));
-        }
+        // Full filename validation — covers length, path separators,
+        // null bytes, and `.` / `..`.
+        crate::validation::validate_filename(&filename)?;
 
         // Ensure the folder path exists
         let folder_id = ensure_folder_path(&mut tx, session.user_id, &dir_path, &mut created_folders).await?;
