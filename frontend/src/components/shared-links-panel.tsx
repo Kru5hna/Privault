@@ -68,7 +68,7 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
       await apiRevokeShareLink(user.sessionToken, shareId);
       toast.success("Share link revoked successfully.");
       logActivity(
-        user.userId,
+        user.sessionToken,
         "Share revoked",
         `Revoked share link for: ${target?.document_name ?? shareId}`
       );
