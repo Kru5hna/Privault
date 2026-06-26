@@ -6,6 +6,10 @@ Privault is a full-stack, zero-trust document vault where every byte is encrypte
 
 Built with Rust (Axum) + Next.js, powered by the Web Crypto API.
 
+<p align="center">
+  <img src="docs/screenshots/landing/hero-desktop.png" alt="Privault landing page" width="800">
+</p>
+
 ---
 
 ## Table of Contents
@@ -13,11 +17,13 @@ Built with Rust (Axum) + Next.js, powered by the Web Crypto API.
 - [Why Privault?](#-why-privault)
 - [Security Architecture](#-security-architecture)
 - [Features](#-features)
+- [Screenshots](#-screenshots)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
 - [API Overview](#-api-overview)
 - [Getting Started](#-getting-started)
 - [Production Checklist](#-production-checklist)
+- [Roadmap](#-roadmap)
 - [License](#-license)
 
 ---
@@ -80,6 +86,38 @@ Share links use an ephemeral Link Key (random AES-256). The DEK is unwrapped loc
 | **🖼️ Thumbnails** | Encrypted thumbnail previews for supported document types |
 | **⚡ Web Worker Crypto** | All encryption/decryption offloaded to a background thread — UI stays responsive |
 | **🏖️ Sandbox Mode** | Full offline simulation using ephemeral in-memory keys — try before you commit |
+
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/dashboard/empty-state-desktop.png" alt="Vault dashboard — empty state" width="800">
+</p>
+
+<p align="center">
+  <em>An empty vault, ready for your first encrypted file.</em>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard/file-preview-desktop.png" alt="Decrypted file preview" width="800">
+</p>
+
+<p align="center">
+  <em>Files are decrypted in your browser using a non-extractable KEK — the server never sees a single plaintext byte.</em>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard/share-modal-desktop.png" alt="Cryptographic share link generation" width="800">
+</p>
+
+<p align="center">
+  <em>Share files via link keys that live in the URL fragment — never on our servers.</em>
+</p>
 
 ---
 
@@ -242,12 +280,32 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## ✅ Production Checklist
 
+- [x] **Object Storage** — encrypted blobs and thumbnails are stored in AWS S3 (bucket `privault-storage-kru5hna`, region `ap-south-1`). No local filesystem dependency.
 - [ ] **CORS** — restrict `CORS_ORIGIN` to your actual domain
 - [ ] **HTTPS** — Web Crypto API requires a secure context; enforce TLS
-- [ ] **Object Storage** — replace local `uploads/` + `thumbnails/` with S3/R2/Backblaze for persistence across restarts
-- [ ] **Rate Limiting** — add per-session upload limits to prevent abuse
-- [ ] **Storage Quotas** — enforce per-user storage caps (e.g. 100 MB free)
-- [ ] **JWT_SECRET** — rotate the default value; though currently unused if sessions are token-based
+- [ ] **Rate Limiting** — per-IP and per-token limits in place; tune for your traffic profile
+- [ ] **Storage Quotas** — per-user storage caps enforced (default 100 MB)
 - [ ] **Payload Limits** — reverse proxy (nginx/Cloudflare) must match the 100 MB body limit
+- [ ] **SES Production Access** — request production access from sandbox for real-user email delivery
+- [ ] **Rotate secrets** — never commit `.env`; use a secrets manager in deployment
 
 ---
+
+## 🗺️ Roadmap
+
+Privault is actively developed. Upcoming work:
+
+- **Desktop client (Tauri)** — native desktop app with the same Web Crypto foundation, system-tray integration, and offline-first sync
+- **Browser extension** — encrypt files in Gmail, Drive, Notion before they leave the page
+- **Team vaults** — shared encrypted workspaces with role-based access
+- **Audit log export** — signed, downloadable activity history
+- **CLI companion** — encrypt and decrypt files from the terminal
+- **Recovery v2** — optional social / Shamir's secret sharing recovery flows
+
+---
+
+## 📜 License
+
+[MIT](LICENSE) — Copyright (c) 2026 Krushna Raut.
+
+You are free to use, modify, and distribute this software. See the [LICENSE](LICENSE) file for the full text.
