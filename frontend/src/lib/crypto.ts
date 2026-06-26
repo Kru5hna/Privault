@@ -450,6 +450,38 @@ export async function decryptDekWithLinkKey(
 }
 
 /**
+ * Derive a recovery KEK from a BIP39 mnemonic phrase.
+ *
+ * This is a separate derivation from the password-based KEK, using a fixed
+ * domain-separated salt so the same phrase always produces the same key.
+ */
+export async function deriveRecoveryKEK(mnemonic: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const salt = encoder.encode("privault-recovery-kek-v1");
+
+  const baseKey = await window.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(mnemonic),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+
+  return window.crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: salt as BufferSource,
+      iterations: 100_000,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["wrapKey", "unwrapKey"]
+  );
+}
+
+/**
  * Generate a 12-word BIP-39 mnemonic phrase.
  */
 export async function generateMnemonic(): Promise<string> {
