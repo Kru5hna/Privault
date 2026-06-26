@@ -31,9 +31,7 @@ pub async fn create_folder(
     State(state): State<AppState>,
     Json(payload): Json<CreateFolderRequest>,
 ) -> Result<Json<FolderMetadata>, AppError> {
-    if payload.name.is_empty() {
-        return Err(AppError::BadRequest("Folder name cannot be empty".to_string()));
-    }
+    crate::validation::validate_folder_name(&payload.name)?;
 
     // Insert folder metadata into DB
     let folder = sqlx::query_as::<_, FolderMetadata>(
@@ -261,9 +259,7 @@ pub async fn rename_folder(
     State(state): State<AppState>,
     Json(payload): Json<RenameFolderRequest>,
 ) -> Result<Json<FolderMetadata>, AppError> {
-    if payload.name.is_empty() {
-        return Err(AppError::BadRequest("Folder name cannot be empty".to_string()));
-    }
+    crate::validation::validate_folder_name(&payload.name)?;
 
     let folder = sqlx::query_as::<_, FolderMetadata>(
         r#"
