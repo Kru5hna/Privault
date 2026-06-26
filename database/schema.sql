@@ -63,10 +63,22 @@ CREATE TABLE sessions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Indexes for faster querying
+-- 4. Activity Logs Table
+-- Stores user-facing activity history tied to the user's account.
+CREATE TABLE activity_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    action VARCHAR(50) NOT NULL,
+    details TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Indexes for faster querying
 CREATE INDEX idx_users_username ON users(username);
 CREATE UNIQUE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_email_verified ON users(email_verified) WHERE email_verified = false;
 CREATE INDEX idx_documents_owner_id ON documents(owner_id);
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX idx_sessions_token_hash ON sessions(token_hash);
+CREATE INDEX idx_activity_logs_user_id ON activity_logs(user_id);
+CREATE INDEX idx_activity_logs_user_time ON activity_logs(user_id, created_at DESC);
