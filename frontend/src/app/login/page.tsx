@@ -95,12 +95,20 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="login-password"
-              className="block text-micro font-semibold text-white/50 mb-2"
-            >
-              Master Password
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label
+                htmlFor="login-password"
+                className="block text-micro font-semibold text-white/50"
+              >
+                Master Password
+              </label>
+              <Link
+                href="/recover"
+                className="text-[10px] font-semibold text-[#E41613] hover:underline"
+              >
+                Forgot Password?
+              </Link>
+            </div>
             <input
               id="login-password"
               type="password"
