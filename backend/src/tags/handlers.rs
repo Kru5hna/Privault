@@ -25,8 +25,9 @@ pub async fn create_tag(
     State(state): State<AppState>,
     Json(payload): Json<CreateTagRequest>,
 ) -> Result<Json<TagMetadata>, AppError> {
-    if payload.name.is_empty() {
-        return Err(AppError::BadRequest("Tag name cannot be empty".to_string()));
+    crate::validation::validate_tag_name(&payload.name)?;
+    if let Some(ref c) = payload.color {
+        crate::validation::validate_color(c)?;
     }
 
     let color = payload.color.unwrap_or_else(|| "#E41613".to_string());
