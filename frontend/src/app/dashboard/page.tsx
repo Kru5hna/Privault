@@ -388,7 +388,7 @@ export default function DashboardPage() {
         ? await decryptFileInWorker(ciphertext, doc.encrypted_dek, privateKey)
         : await decryptFile(ciphertext, doc.encrypted_dek, privateKey);
       setPreviewBytes(decryptedBytes);
-      logActivity(user.userId, "Preview", `Previewed file: ${doc.name}`);
+      logActivity(user.sessionToken, "Preview", `Previewed file: ${doc.name}`);
     } catch (err: unknown) {
       toast.error(`Preview failed: ${err instanceof Error ? err.message : "Unknown"}`);
       setPreviewDoc(null);
@@ -600,7 +600,7 @@ export default function DashboardPage() {
             ...prev,
             [relativePath]: { ...prev[relativePath], state: "complete" as const },
           }));
-          logActivity(user.userId, "Upload", `Uploaded encrypted file: ${uploadName}`);
+          logActivity(user.sessionToken, "Upload", `Uploaded encrypted file: ${uploadName}`);
         } catch (err: unknown) {
           if (err instanceof DOMException && err.name === "AbortError") return;
           const errorMsg = err instanceof Error ? err.message : "Upload failed";
@@ -745,7 +745,7 @@ export default function DashboardPage() {
       link.click();
       link.parentNode?.removeChild(link);
       window.URL.revokeObjectURL(url);
-      logActivity(user.userId, "Download", `Downloaded decrypted file: ${doc.name}`);
+      logActivity(user.sessionToken, "Download", `Downloaded decrypted file: ${doc.name}`);
     } catch (err: unknown) {
       toast.error(`Decryption failed: ${err instanceof Error ? err.message : "Unknown"}`);
     }
@@ -819,7 +819,7 @@ export default function DashboardPage() {
               toast.success("Document moved to Recycle Bin");
             }
             refreshUsage();
-            logActivity(user.userId, "Delete", `Moved document to Recycle Bin: ${docName}`);
+            logActivity(user.sessionToken, "Delete", `Moved document to Recycle Bin: ${docName}`);
           } catch (err: unknown) {
             toast.error(`Failed to delete: ${err instanceof Error ? err.message : "Unknown"}`);
           } finally {
@@ -1066,7 +1066,7 @@ export default function DashboardPage() {
 
         {viewMode === "activity" && (
           <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
-            <ActivityLogPanel userId={user.userId} />
+            <ActivityLogPanel sessionToken={user.sessionToken} />
           </main>
         )}
       </div>
