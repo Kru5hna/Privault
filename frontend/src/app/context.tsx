@@ -22,6 +22,8 @@ import {
   apiStoreRecoveryKey,
   apiGetEmailStatus,
   UserSession,
+  apiRecover,
+  apiRecoveryChangePassword,
 } from "@/lib/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ interface AuthContextType {
   unlock: (password: string) => Promise<void>;
   logout: () => Promise<void>;
   enterSandbox: () => Promise<void>;
+  recover: (username: string, recoveryPhrase: string, newPassword: string) => Promise<void>;
   clearError: () => void;
   /** Re-fetch /api/me and merge the email verification status into `user`. */
   refreshEmailStatus: () => Promise<void>;
@@ -362,6 +365,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
+  // ── Account Recovery ──────────────────────────────────────────────────────
+  const recover = useCallback(async (username: string, recoveryPhrase: string, newPassword: string) => {
+    setError(null);
+    try {
+      // 1. Authenticate with recovery phrase & fetch recovery key
+      const response = await apiRecover(username.trim(), recoveryPhrase.trim());
+
+      // 2. Derive recovery KEK from phrase
+      const recoveryKek = await deriveRecoveryKEK(recoveryPhrase.trim());
+
+      // 3. Decrypt RSA private key with recovery KEK
+      const decryptedPrivateKey = await unwrapPrivateKey(
+        response.recovery_wrapped_key,
+        response.recovery_wrapped_key_iv,
+        recoveryKek
+      );
+
+      // 4. Generate new password salts
+      const newAuthSalt = await generateSalt();
+      const newKekSalt = await generateSalt();
+
+      // 5. Derive new auth verifier & new password KEK
+      const newAuthVerifier = await deriveAuthVerifier(newPassword, newAuthSalt);
+      const newKek = await deriveKEK(newPassword, newKekSalt);
+
+      // 6. Wrap the decrypted private key with the new password KEK
+      const { wrappedKey: newWrappedKey, iv: newWrappedKeyIv } = await wrapPrivateKey(
+        decryptedPrivateKey,
+        newKek
+      );
+
+      // 7. Update password material on server (re-keys account, clears old recovery)
+      await apiRecoveryChangePassword(
+        response.session_token,
+        newAuthVerifier,
+        newAuthSalt,
+        newKekSalt,
+        newWrappedKey,
+        newWrappedKeyIv
+      );
+
+      // 8. Establish session locally
+      const session: UserSession = {
+        sessionToken: response.session_token,
+        userId: response.user_id,
+        username: response.username,
+        publicKey: response.public_key,
+        authSalt: newAuthSalt,
+        kekSalt: newKekSalt,
+        wrappedPrivateKey: newWrappedKey,
+        wrappedPrivateKeyIv: newWrappedKeyIv,
+        email: null,
+        emailVerified: false,
+      };
+
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+      setUser(session);
+      setPrivateKey(decryptedPrivateKey);
+      setStatus("unlocked");
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      console.error("Account recovery failed:", err);
+      const message = err instanceof Error ? err.message : "Failed to recover account";
+      setError(message);
+      throw err;
+    }
+  }, [router]);
+
   const clearError = useCallback(() => setError(null), []);
 
   return (
@@ -376,6 +447,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unlock,
         logout,
         enterSandbox,
+        recover,
         clearError,
         refreshEmailStatus,
       }}
