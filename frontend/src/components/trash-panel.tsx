@@ -56,7 +56,7 @@ export function TrashPanel({
         toast.success(`Restored "${doc.name}" successfully`);
       }
       
-      logActivity(user.userId, "Restore", `Restored document ${doc.name}`);
+      logActivity(user.sessionToken, "Restore", `Restored document ${doc.name}`);
       await onRefresh();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to restore document");
@@ -76,7 +76,7 @@ export function TrashPanel({
         toast.success(`Permanently deleted "${doc.name}"`);
       }
 
-      logActivity(user.userId, "Delete", `Permanently deleted document ${doc.name}`);
+      logActivity(user.sessionToken, "Delete", `Permanently deleted document ${doc.name}`);
       setConfirmDeleteDoc(null);
       await onRefresh();
     } catch (err: unknown) {
@@ -101,7 +101,7 @@ export function TrashPanel({
         toast.success("Trash emptied successfully");
       }
 
-      logActivity(user.userId, "Delete", "Emptied secure trash bin");
+      logActivity(user.sessionToken, "Delete", "Emptied secure trash bin");
       setConfirmEmpty(false);
       await onRefresh();
     } catch (err: unknown) {
