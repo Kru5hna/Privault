@@ -24,13 +24,22 @@ interface AdvancedViewerProps {
 // ─────────────────────────────────────────────────────────────────────────────
 // Stylesheet & Script Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+interface CustomWindow extends Window {
+  __scriptPromises?: Record<string, Promise<void> | undefined>;
+  pdfjsLib?: {
+    GlobalWorkerOptions: { workerSrc: string };
+    getDocument: (params: { data: Uint8Array; isEvalSupported?: boolean; disableFontFace?: boolean }) => { promise: Promise<{ numPages: number; getPage: (n: number) => unknown; destroy: () => Promise<void> }> };
+  };
+  "pdfjs-dist/build/pdf"?: CustomWindow["pdfjsLib"];
+}
+
 function loadScript(src: string): Promise<void> {
-  const globalWindow = window as any;
-  if (!globalWindow.__scriptPromises) {
-    globalWindow.__scriptPromises = {};
+  const customWindow = window as unknown as CustomWindow;
+  if (!customWindow.__scriptPromises) {
+    customWindow.__scriptPromises = {};
   }
-  if (globalWindow.__scriptPromises[src]) {
-    return globalWindow.__scriptPromises[src];
+  if (customWindow.__scriptPromises[src]) {
+    return customWindow.__scriptPromises[src];
   }
 
   const existingScript = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement;
@@ -44,7 +53,7 @@ function loadScript(src: string): Promise<void> {
         existingScript.dataset.loaded = "true";
         resolve();
       };
-      const onScriptError = (err: any) => {
+      const onScriptError = (err: unknown) => {
         reject(err);
       };
       existingScript.addEventListener("load", onScriptLoad);
@@ -62,7 +71,7 @@ function loadScript(src: string): Promise<void> {
     document.head.appendChild(script);
   });
 
-  globalWindow.__scriptPromises[src] = promise;
+  customWindow.__scriptPromises[src] = promise;
   return promise;
 }
 
@@ -305,11 +314,11 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
     async function loadPDF() {
       try {
         await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
-        const globalWindow = window as any;
-        const pdfjsLib = (globalWindow.pdfjsLib || globalWindow["pdfjs-dist/build/pdf"]) as {
-          GlobalWorkerOptions: { workerSrc: string };
-          getDocument: (params: { data: Uint8Array; isEvalSupported?: boolean; disableFontFace?: boolean }) => { promise: Promise<{ numPages: number; getPage: (n: number) => unknown; destroy: () => Promise<void> }> };
-        };
+        const customWindow = window as unknown as CustomWindow;
+        const pdfjsLib = customWindow.pdfjsLib || customWindow["pdfjs-dist/build/pdf"];
+        if (!pdfjsLib) {
+          throw new Error("pdf.js failed to load");
+        }
         pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
         // Pass a fresh slice so the worker receives an uncloned buffer.
@@ -343,6 +352,50 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
       renderTasksRef.current.clear();
     };
   }, [fileBytes]);
+
+  const applyHighlight = useCallback((container: HTMLElement | null, query: string) => {
+    if (!container) return;
+    const spans = container.querySelectorAll("span");
+    if (!query.trim()) {
+      spans.forEach((span) => {
+        if (span.dataset.highlighted === "1") {
+          span.textContent = span.textContent || "";
+          delete span.dataset.highlighted;
+        }
+      });
+      return;
+    }
+    const term = query.trim().toLowerCase();
+    spans.forEach((span) => {
+      const text = span.textContent || "";
+      const lowerText = text.toLowerCase();
+      if (lowerText.includes(term)) {
+        span.dataset.highlighted = "1";
+        span.textContent = ""; // Clear existing content
+        let lastIndex = 0;
+        let index = lowerText.indexOf(term, lastIndex);
+        while (index !== -1) {
+          // Add preceding text
+          if (index > lastIndex) {
+            span.appendChild(document.createTextNode(text.substring(lastIndex, index)));
+          }
+          // Add highlighted text
+          const mark = document.createElement("mark");
+          mark.textContent = text.substring(index, index + term.length);
+          span.appendChild(mark);
+          lastIndex = index + term.length;
+          index = lowerText.indexOf(term, lastIndex);
+        }
+        // Add remaining text
+        if (lastIndex < text.length) {
+          span.appendChild(document.createTextNode(text.substring(lastIndex)));
+        }
+      } else if (span.dataset.highlighted === "1") {
+        span.textContent = text;
+        delete span.dataset.highlighted;
+      }
+    });
+  }, []);
 
   // ── 2. Render a single page (lazy) ─────────────────────────────────────
   const renderPage = useCallback(async (pageNum: number) => {
@@ -411,10 +464,10 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
 
       // (Re)build the text layer only when scale actually changes.
       textLayer.innerHTML = "";
-      const globalWindow = window as any;
-      const pdfjsLib = (globalWindow.pdfjsLib || globalWindow["pdfjs-dist/build/pdf"]) as {
+      const globalWindow = window as unknown as Record<string, {
         renderTextLayer: (params: { textContentSource: unknown; container: HTMLElement; viewport: { width: number; height: number }; textDivs: [] }) => { promise: Promise<void> };
-      };
+      }>;
+      const pdfjsLib = globalWindow.pdfjsLib || globalWindow["pdfjs-dist/build/pdf"];
       const textContent = await page.getTextContent();
       await pdfjsLib.renderTextLayer({
         textContentSource: textContent,
@@ -429,40 +482,7 @@ function PDFViewer({ fileBytes }: { fileBytes: Uint8Array }) {
         console.error(`PDF rendering error page ${pageNum}:`, err);
       }
     }
-  }, [pdfDoc, scale, highlightQuery, setPageDimensions]);
-
-  // ── 3. Highlight utility (mutates DOM in place) ─────────────────────────
-  const applyHighlight = useCallback((container: HTMLElement | null, query: string) => {
-    if (!container) return;
-    const spans = container.querySelectorAll("span");
-    if (!query.trim()) {
-      spans.forEach((span) => {
-        if (span.dataset.highlighted === "1") {
-          span.innerHTML = span.textContent || "";
-          delete span.dataset.highlighted;
-        }
-      });
-      return;
-    }
-    const escaped = query.trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`(${escaped})`, "gi");
-    spans.forEach((span) => {
-      const text = span.textContent || "";
-      if (text.toLowerCase().includes(query.trim().toLowerCase())) {
-        if (span.dataset.highlighted === "1") {
-          // Already wrapped — strip existing <mark>s and re-wrap.
-          const stripped = span.innerHTML.replace(/<\/?mark>/g, "");
-          span.innerHTML = stripped.replace(regex, `<mark>$1</mark>`);
-        } else {
-          span.innerHTML = text.replace(regex, `<mark>$1</mark>`);
-          span.dataset.highlighted = "1";
-        }
-      } else if (span.dataset.highlighted === "1") {
-        span.innerHTML = span.textContent || "";
-        delete span.dataset.highlighted;
-      }
-    });
-  }, []);
+  }, [pdfDoc, scale, highlightQuery, setPageDimensions, applyHighlight]);
 
   // ── 4. Highlight changes apply in place — no full re-render ─────────────
   useEffect(() => {
