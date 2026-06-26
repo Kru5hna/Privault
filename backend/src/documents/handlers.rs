@@ -566,6 +566,19 @@ pub async fn delete_folder_documents(
     })?;
 
     let count = result.rows_affected();
+
+    if count > 0 {
+        audit::log_event(
+            &state.db,
+            session.user_id,
+            audit::EVENT_DELETED,
+            Some(audit::RESOURCE_FOLDER),
+            Some(folder_id),
+            Some(audit::detail([("documents_trashed", count as i64)])),
+            None,
+        ).await;
+    }
+
     Ok(Json(serde_json::json!({
         "message": format!("{} document(s) moved to trash", count)
     })))
