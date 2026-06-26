@@ -124,8 +124,8 @@ export const CHALLENGE_STEPS = [
   },
   {
     step: "02",
-    title: "We'll give you DB access",
-    desc: "We'll literally hand you a dump of our database. No redactions. No excuses.",
+    title: "See what's in our database",
+    desc: "Ciphertext, wrapped keys, and nothing else. We publish exactly what our servers hold — because what we don't store is the only thing that matters.",
     highlight: true,
   },
   {
