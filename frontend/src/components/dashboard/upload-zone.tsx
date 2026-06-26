@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef } from "react";
-import { File } from "lucide-react";
+import { UploadCloud } from "lucide-react";
 
 interface UploadZoneProps {
   uploadState: "idle" | "encrypting" | "uploading" | "complete";
@@ -13,6 +13,7 @@ interface UploadZoneProps {
   onDrop: (e: React.DragEvent) => void;
   onFilesSelected: (files: FileList) => void;
   onFolderSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onCancel: () => void;
 }
 
 export const UploadZone = React.memo(function UploadZone({
@@ -25,6 +26,7 @@ export const UploadZone = React.memo(function UploadZone({
   onDrop,
   onFilesSelected,
   onFolderSelect,
+  onCancel,
 }: UploadZoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -71,6 +73,13 @@ export const UploadZone = React.memo(function UploadZone({
           <span className="text-micro font-bold tracking-[0.2em] text-[#E41613]">
             ENCRYPTING LOCALLY...
           </span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCancel(); }}
+            className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-[#8E929F] hover:text-[#E41613] transition-colors cursor-pointer underline underline-offset-2"
+          >
+            Cancel
+          </button>
         </div>
       )}
 
@@ -83,6 +92,13 @@ export const UploadZone = React.memo(function UploadZone({
           <span className="text-micro font-bold tracking-[0.2em] text-[#E41613]">
             UPLOADING CIPHERTEXT...
           </span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCancel(); }}
+            className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-[#8E929F] hover:text-[#E41613] transition-colors cursor-pointer underline underline-offset-2"
+          >
+            Cancel
+          </button>
         </div>
       )}
 
@@ -99,7 +115,7 @@ export const UploadZone = React.memo(function UploadZone({
 
       {uploadState === "idle" && (
         <div className="text-center p-6 flex flex-col items-center justify-center gap-4">
-          <File size={32} className="text-[#E41613]/60" />
+          <UploadCloud size={32} className="text-[#E41613]/60" />
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.15em] text-white/60 group-hover:text-white transition-colors duration-300">
               Drag files/folders here, click to browse files, or{" "}
