@@ -7,7 +7,7 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use super::models::*;
-use crate::{auth::AuthSession, error::AppError, AppState};
+use crate::{audit, auth::AuthSession, error::AppError, AppState};
 
 /// List all trashed documents and folders for the current user.
 pub async fn list_trash(
@@ -129,6 +129,16 @@ pub async fn restore_document(
         return Err(AppError::NotFound("Trashed document not found".to_string()));
     }
 
+    audit::log_event(
+        &state.db,
+        session.user_id,
+        audit::EVENT_RESTORED,
+        Some(audit::RESOURCE_DOCUMENT),
+        Some(doc_id),
+        None,
+        None,
+    ).await;
+
     Ok(Json(serde_json::json!({
         "message": "Document restored successfully"
     })))
@@ -226,6 +236,16 @@ pub async fn restore_folder(
     .execute(&state.db)
     .await?;
 
+    audit::log_event(
+        &state.db,
+        session.user_id,
+        audit::EVENT_RESTORED,
+        Some(audit::RESOURCE_FOLDER),
+        Some(folder_id),
+        None,
+        None,
+    ).await;
+
     Ok(Json(serde_json::json!({
         "message": "Folder and contents restored successfully"
     })))
@@ -287,6 +307,16 @@ pub async fn permanent_delete_document(
         tracing::warn!("Failed to delete file from S3: {} ({})", storage_path, e);
     }
 
+    audit::log_event(
+        &state.db,
+        session.user_id,
+        audit::EVENT_PERMANENT_DELETED,
+        Some(audit::RESOURCE_DOCUMENT),
+        Some(doc_id),
+        None,
+        None,
+    ).await;
+
     Ok(Json(serde_json::json!({
         "message": "Document permanently deleted"
     })))
@@ -324,6 +354,34 @@ pub async fn permanent_delete_folder(
     })?;
 
     let paths: Vec<String> = doc_rows.iter().map(|r| r.get("storage_path")).collect();
+
+    // Also collect thumbnails so they don't orphan in S3
+    let thumb_rows = sqlx::query(
+        r#"
+        WITH RECURSIVE subfolders AS (
+            SELECT id FROM folders WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT f.id FROM folders f
+            JOIN subfolders sf ON f.trash_origin_parent_id = sf.id
+            WHERE f.owner_id = $2
+        )
+        SELECT thumbnail_path FROM documents
+        WHERE owner_id = $2
+          AND deleted_at IS NOT NULL
+          AND trash_origin_folder_id IN (SELECT id FROM subfolders)
+          AND thumbnail_path IS NOT NULL
+        "#,
+    )
+    .bind(folder_id)
+    .bind(session.user_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error finding folder thumbnails: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
+    let thumb_paths: Vec<String> = thumb_rows.iter().map(|r| r.get("thumbnail_path")).collect();
 
     // Delete documents from DB
     sqlx::query(
@@ -364,12 +422,22 @@ pub async fn permanent_delete_folder(
     .execute(&state.db)
     .await?;
 
-    // Delete files from S3
-    for path in &paths {
+    // Delete files from S3 (documents + thumbnails)
+    for path in paths.iter().chain(thumb_paths.iter()) {
         if let Err(e) = state.storage.delete_object(path).await {
             tracing::warn!("Failed to delete file from S3: {} ({})", path, e);
         }
     }
+
+    audit::log_event(
+        &state.db,
+        session.user_id,
+        audit::EVENT_PERMANENT_DELETED,
+        Some(audit::RESOURCE_FOLDER),
+        Some(folder_id),
+        None,
+        None,
+    ).await;
 
     Ok(Json(serde_json::json!({
         "message": "Folder permanently deleted"
@@ -417,6 +485,19 @@ pub async fn empty_trash(
 
     let thumb_paths: Vec<String> = thumb_rows.iter().map(|r| r.get("thumbnail_path")).collect();
 
+    // Count before deletion so we can record accurate audit detail
+    let documents_deleted = paths.len();
+    let folders_deleted: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM folders WHERE owner_id = $1 AND deleted_at IS NOT NULL",
+    )
+    .bind(session.user_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error counting trashed folders: {}", e);
+        AppError::Internal(anyhow::anyhow!("Internal error"))
+    })?;
+
     // Delete all trashed documents
     sqlx::query("DELETE FROM documents WHERE owner_id = $1 AND deleted_at IS NOT NULL")
         .bind(session.user_id)
@@ -436,6 +517,19 @@ pub async fn empty_trash(
         }
     }
 
+    audit::log_event(
+        &state.db,
+        session.user_id,
+        audit::EVENT_TRASH_EMPTIED,
+        None,
+        None,
+        Some(audit::detail([
+            ("documents_deleted", documents_deleted as i64),
+            ("folders_deleted", folders_deleted),
+        ])),
+        None,
+    ).await;
+
     Ok(Json(serde_json::json!({
         "message": "Trash emptied successfully"
     })))
@@ -451,10 +545,10 @@ pub async fn cleanup_expired_trash(state: &AppState) {
 
     tracing::info!("Running trash cleanup (retention: {} days)", retention_days);
 
-    // Find expired documents
+    // Find expired documents (storage_path + thumbnail_path)
     let doc_rows = match sqlx::query(
         r#"
-        SELECT storage_path FROM documents
+        SELECT storage_path, thumbnail_path FROM documents
         WHERE deleted_at IS NOT NULL
           AND deleted_at < NOW() - ($1::TEXT || ' days')::INTERVAL
         "#,
@@ -470,7 +564,17 @@ pub async fn cleanup_expired_trash(state: &AppState) {
         }
     };
 
-    let paths: Vec<String> = doc_rows.iter().map(|r| r.get("storage_path")).collect();
+    let mut paths: Vec<String> = Vec::with_capacity(doc_rows.len());
+    let mut thumb_paths: Vec<String> = Vec::new();
+    for r in &doc_rows {
+        let storage_path: String = r.get("storage_path");
+        paths.push(storage_path);
+        let thumb: Option<String> = r.get("thumbnail_path");
+        if let Some(t) = thumb {
+            thumb_paths.push(t);
+        }
+    }
+    let expired_count = paths.len();
 
     // Delete expired documents
     if let Err(e) = sqlx::query(
@@ -502,12 +606,18 @@ pub async fn cleanup_expired_trash(state: &AppState) {
         tracing::error!("Failed to delete expired folders: {}", e);
     }
 
-    // Delete files from S3
-    for path in paths {
-        if let Err(e) = state.storage.delete_object(&path).await {
+    // Delete files from S3 (documents + thumbnails)
+    for path in paths.iter().chain(thumb_paths.iter()) {
+        if let Err(e) = state.storage.delete_object(path).await {
             tracing::warn!("Failed to delete expired file from S3: {} ({})", path, e);
         }
     }
 
-    tracing::info!("Trash cleanup complete");
+    // Cleanup is a system task; no user_id available. Traced instead.
+    // To audit this, add a 'system' user in the DB and pass its id below.
+    tracing::info!(
+        "Trash cleanup complete: {} expired documents purged (retention {} days)",
+        expired_count,
+        retention_days
+    );
 }
