@@ -16,33 +16,36 @@ import {
   RefreshCw,
   Calendar,
   XCircle,
-  FileKey
+  FileKey,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 
 interface ActivityLogPanelProps {
-  userId: string;
+  sessionToken: string;
 }
 
-export function ActivityLogPanel({ userId }: ActivityLogPanelProps) {
+export function ActivityLogPanel({ sessionToken }: ActivityLogPanelProps) {
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState<string>("All");
   const [confirmClear, setConfirmClear] = useState(false);
 
-  const loadLogs = React.useCallback(() => {
-    if (!userId) return;
-    const items = getActivityLogs(userId);
+  const loadLogs = React.useCallback(async () => {
+    if (!sessionToken) return;
+    setLoading(true);
+    const items = await getActivityLogs(sessionToken);
     setLogs(items);
-  }, [userId]);
+    setLoading(false);
+  }, [sessionToken]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadLogs();
   }, [loadLogs]);
 
-  const handleClearLogs = () => {
-    clearActivityLogs(userId);
+  const handleClearLogs = async () => {
+    await clearActivityLogs(sessionToken);
     setLogs([]);
     setConfirmClear(false);
     toast.success("Activity logs cleared successfully");
@@ -129,8 +132,15 @@ export function ActivityLogPanel({ userId }: ActivityLogPanelProps) {
         ))}
       </div>
 
-      {/* Timeline View */}
-      {filteredLogs.length === 0 ? (
+      {/* Loading State */}
+      {loading ? (
+        <div className="py-20 text-center border border-dashed border-white/5 bg-[#111215] p-6 rounded flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 text-[#E41613] animate-spin" />
+          <span className="text-xs tracking-widest uppercase text-white/30">
+            Loading activity history...
+          </span>
+        </div>
+      ) : filteredLogs.length === 0 ? (
         <div className="py-20 text-center border border-dashed border-white/5 bg-[#111215] p-6 rounded flex flex-col items-center justify-center gap-3">
           <History className="w-12 h-12 text-[#5E626F] opacity-40 animate-pulse" />
           <span className="text-xs tracking-widest uppercase text-white/30">
@@ -183,7 +193,7 @@ export function ActivityLogPanel({ userId }: ActivityLogPanelProps) {
             Clear Logs
           </h3>
           <p className="text-xs text-[#8E929F] mb-6 leading-relaxed">
-            Are you sure you want to clear your local activity history? This will clear logs stored on this device only.
+            Are you sure you want to clear your activity history? This action cannot be undone.
           </p>
           <div className="flex gap-3">
             <button
