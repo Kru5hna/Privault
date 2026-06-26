@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { AlertTriangle, Copy, Download, Printer, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { Modal } from "@/components/ui/modal";
 
 interface RecoveryPhraseModalProps {
   isOpen: boolean;
@@ -21,8 +22,6 @@ export function RecoveryPhraseModal({
 }: RecoveryPhraseModalProps) {
   const [copied, setCopied] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
-
-  if (!isOpen) return null;
 
   const words = mnemonic.split(" ");
 
@@ -116,11 +115,19 @@ SAFETY INSTRUCTIONS:
   };
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-md px-4 overflow-y-auto py-8">
-      {/* Background decoration */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-80 w-80 rounded-full bg-[#E41613]/5 blur-[120px] pointer-events-none" />
-
-      <div className="relative z-10 w-full max-w-lg panel-card p-6 sm:p-10 my-auto">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      zIndex={150}
+      // Critical security flow. Accidentally tapping the backdrop here
+      // would dump the user back to the dashboard mid-confirmation —
+      // disallow that and require an explicit close.
+      dismissibleByBackdrop={false}
+      showCloseButton={false}
+      data-testid="recovery-phrase-modal"
+    >
+      <div className="relative z-10 w-full panel-card p-6 sm:p-10 my-auto">
         {/* Header */}
         <div className="mb-6 text-center">
           {onBack && (
@@ -181,7 +188,7 @@ SAFETY INSTRUCTIONS:
             <Copy size={14} />
             {copied ? "Copied!" : "Copy Phrase"}
           </button>
-          
+
           <button
             onClick={handleDownload}
             className="flex items-center gap-2 border border-white/10 hover:border-white/20 bg-[#E41613]/15 hover:bg-[#E41613]/25 px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#E41613] hover:text-white transition-all cursor-pointer rounded"
@@ -223,6 +230,6 @@ SAFETY INSTRUCTIONS:
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
