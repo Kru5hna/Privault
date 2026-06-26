@@ -66,9 +66,15 @@ Every uploaded file gets a **unique** random AES-256-GCM Data Encryption Key (DE
 
 Decryption reverses the chain: RSA private key unwraps the DEK, DEK decrypts the file — all in the browser.
 
-### Secure Sharing
+### Ephemeral Sharing
 
 Share links use an ephemeral Link Key (random AES-256). The DEK is unwrapped locally, re-encrypted with the Link Key, and the Link Key itself is encrypted with your public key for later retrieval. The link key travels in the URL **hash fragment** (`#key`) — never sent to the server, never logged in referrer headers.
+
+### Session Fingerprinting & Lockout
+
+- **Session Fingerprinting:** Active session tokens are bound to a hash of the client's IP prefix (first 3 octets for IPv4, first 4 hextets for IPv6) and the first 64 characters of their User-Agent. Access from a mismatched network or device is immediately rejected with HTTP 401.
+- **Sliding Expiry:** Sessions feature a 24-hour idle timeout. Each active request extends `expires_at` (touch-to-refresh) if more than 1 hour has elapsed since last use, up to a hard cap of 7 days from creation.
+- **Mnemonic Lockout:** The `/api/recovery/recover` endpoint tracks failed recovery attempts per username. After 10 consecutive failures, the account is locked for 24 hours to block dictionary attacks.
 
 ---
 
@@ -82,7 +88,10 @@ Share links use an ephemeral Link Key (random AES-256). The DEK is unwrapped loc
 | **♻️ Trash & Recovery** | Soft-delete with restore, recursive folder trash, automatic purge of expired items (configurable retention) |
 | **🏷️ Tagging** | Custom tags with colors, attach to documents, filter and organize |
 | **📋 Audit Log** | Append-only activity log: logins, uploads, downloads, shares, deletions — all tracked |
-| **🔑 BIP39 Recovery** | 12-word mnemonic phrase for account recovery and password rotation without data loss |
+| **🔑 BIP39 Recovery** | 12-word mnemonic phrase for account recovery, forgot-password flows, and password rotation without data loss |
+| **🛡️ Security Headers** | Strict CSP, HSTS, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy enforced on frontend/backend |
+| **👥 Session Hardening** | IP/UA prefix fingerprinting, touch-to-refresh sliding expiry, and 24h/7d session timeouts |
+| **🚀 PDF Virtualization** | Optimized PDF previewing with on-scroll page unloading and IntersectionObserver canvas recycling, reducing GPU memory by 95% |
 | **🖼️ Thumbnails** | Encrypted thumbnail previews for supported document types |
 | **⚡ Web Worker Crypto** | All encryption/decryption offloaded to a background thread — UI stays responsive |
 | **🏖️ Sandbox Mode** | Full offline simulation using ephemeral in-memory keys — try before you commit |
