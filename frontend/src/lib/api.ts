@@ -17,9 +17,13 @@ export interface UserSession {
   userId: string;
   username: string;
   publicKey: string;
+  authSalt: string;
   kekSalt: string;
   wrappedPrivateKey: string;
   wrappedPrivateKeyIv: string;
+  /** Optional in older stored sessions — treat missing as unverified. */
+  email?: string | null;
+  emailVerified?: boolean;
 }
 
 export interface DocumentMetadata {
@@ -133,8 +137,9 @@ export async function apiRegister(
   kekSalt: string,
   publicKey: string,
   wrappedPrivateKey: string,
-  wrappedPrivateKeyIv: string
-): Promise<{ id: string; message: string }> {
+  wrappedPrivateKeyIv: string,
+  email?: string
+): Promise<{ id: string; message: string; email_sent?: boolean }> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/register`, {
     method: "POST",
     timeout: 12_000,
@@ -147,8 +152,19 @@ export async function apiRegister(
       public_key: publicKey,
       wrapped_private_key: wrappedPrivateKey,
       wrapped_private_key_iv: wrappedPrivateKeyIv,
+      email: email || undefined,
     }),
   });
+  return handleResponse(res);
+}
+
+/** Verify email with a token from the verification link */
+export async function apiVerifyEmail(
+  token: string
+): Promise<{ message: string; verified: boolean }> {
+  const res = await fetchWithTimeout(
+    `${API_BASE_URL}/api/auth/verify-email?token=${encodeURIComponent(token)}`
+  );
   return handleResponse(res);
 }
 
@@ -164,6 +180,7 @@ export async function apiLogin(
   wrapped_private_key: string;
   wrapped_private_key_iv: string;
   public_key: string;
+  auth_salt: string;
   kek_salt: string;
 }> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/login`, {
@@ -191,8 +208,60 @@ export async function apiLogout(sessionToken: string): Promise<void> {
 /** Verify session validity and get user profile (8s timeout) */
 export async function apiGetMe(
   sessionToken: string
-): Promise<{ user_id: string; username: string }> {
+): Promise<{
+  user_id: string;
+  username: string;
+  email?: string | null;
+  email_verified: boolean;
+}> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/me`, {
+    method: "GET",
+    headers: authHeaders(sessionToken),
+  });
+  return handleResponse(res);
+}
+
+/**
+ * Re-fetch only the email verification status for the current session.
+ * Lighter than `apiGetMe`; safe to poll on focus / banner mount.
+ */
+export async function apiGetEmailStatus(
+  sessionToken: string
+): Promise<{
+  email?: string | null;
+  email_verified: boolean;
+}> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/me`, {
+    method: "GET",
+    headers: authHeaders(sessionToken),
+  });
+  return handleResponse(res);
+}
+
+/**
+ * Request a new verification email. Currently a no-op stub — the backend
+ * route is not yet wired. The UI treats a 404 as "service unavailable" and
+ * shows the temporary-unavailable overlay instead of failing.
+ */
+export async function apiResendVerification(
+  sessionToken: string
+): Promise<{ message: string }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/resend-verification`, {
+    method: "POST",
+    headers: authHeaders(sessionToken),
+  });
+  return handleResponse(res);
+}
+
+/** Storage usage for the authenticated user. */
+export interface UsageInfo {
+  used_bytes: number;
+  quota_bytes: number;
+  document_count: number;
+}
+
+export async function apiGetUsage(sessionToken: string): Promise<UsageInfo> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/me/usage`, {
     method: "GET",
     headers: authHeaders(sessionToken),
   });
@@ -225,7 +294,8 @@ export async function apiUploadDocument(
   fileBlob: Blob,
   fileName: string,
   encryptedDek: string,
-  folderId?: string | null
+  folderId?: string | null,
+  signal?: AbortSignal
 ): Promise<{ id: string; message: string }> {
   const formData = new FormData();
   formData.append("file", fileBlob, fileName);
@@ -239,6 +309,7 @@ export async function apiUploadDocument(
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
+    signal,
   });
   return handleResponse(res);
 }
@@ -507,6 +578,111 @@ export async function apiGetFolderStats(
 ): Promise<FolderStats> {
   const res = await fetch(`${API_BASE_URL}/api/folders/${folderId}/stats`, {
     method: "GET",
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+/** Store the recovery-wrapped private key on the server */
+export async function apiStoreRecoveryKey(
+  token: string,
+  recoveryWrappedKey: string,
+  recoveryWrappedKeyIv: string
+): Promise<{ message: string }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/recovery/store-key`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      recovery_wrapped_key: recoveryWrappedKey,
+      recovery_wrapped_key_iv: recoveryWrappedKeyIv,
+    }),
+  });
+  return handleResponse(res);
+}
+
+/** Change the user's master password (authenticated) */
+export async function apiChangePassword(
+  token: string,
+  currentAuthVerifier: string,
+  newAuthVerifier: string,
+  newAuthSalt: string,
+  newKekSalt: string,
+  newWrappedPrivateKey: string,
+  newWrappedPrivateKeyIv: string,
+): Promise<{ message: string }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/change-password`, {
+    method: "POST",
+    timeout: 12_000,
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      current_auth_verifier: currentAuthVerifier,
+      new_auth_verifier: newAuthVerifier,
+      new_auth_salt: newAuthSalt,
+      new_kek_salt: newKekSalt,
+      new_wrapped_private_key: newWrappedPrivateKey,
+      new_wrapped_private_key_iv: newWrappedPrivateKeyIv,
+    }),
+  });
+  return handleResponse(res);
+}
+
+/** Permanently delete the user's account (authenticated) */
+export async function apiDeleteAccount(
+  token: string,
+): Promise<{ message: string }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/account`, {
+    method: "DELETE",
+    timeout: 30_000,
+    headers: authHeaders(token),
+    body: JSON.stringify({}),
+  });
+  return handleResponse(res);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session Management Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SessionInfo {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  is_current: boolean;
+}
+
+/** List all active sessions for the current user */
+export async function apiGetSessions(
+  token: string
+): Promise<SessionInfo[]> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/sessions`, {
+    headers: authHeaders(token),
+  });
+  return handleResponse(res);
+}
+
+/** Revoke a specific session by ID */
+export async function apiRevokeSession(
+  token: string,
+  sessionId: string
+): Promise<{ message: string }> {
+  const res = await fetchWithTimeout(
+    `${API_BASE_URL}/api/auth/sessions/${sessionId}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }
+  );
+  return handleResponse(res);
+}
+
+/** Revoke all sessions except the current one */
+export async function apiRevokeAllSessions(
+  token: string
+): Promise<{ message: string }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/sessions`, {
+    method: "DELETE",
     headers: authHeaders(token),
   });
   return handleResponse(res);
