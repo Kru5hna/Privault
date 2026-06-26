@@ -688,6 +688,58 @@ export async function apiRevokeAllSessions(
   return handleResponse(res);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Activity Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ActivityLogEntry {
+  id: string;
+  action: string;
+  details: string;
+  created_at: string;
+}
+
+export interface ActivityLogListResponse {
+  logs: ActivityLogEntry[];
+  total: number;
+}
+
+/** Log a new activity entry for the authenticated user */
+export async function apiLogActivity(
+  sessionToken: string,
+  action: string,
+  details: string
+): Promise<void> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/activity`, {
+    method: "POST",
+    headers: authHeaders(sessionToken),
+    body: JSON.stringify({ action, details }),
+  });
+  await handleResponse(res);
+}
+
+/** Fetch activity logs for the authenticated user */
+export async function apiGetActivityLogs(
+  sessionToken: string
+): Promise<ActivityLogListResponse> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/activity`, {
+    method: "GET",
+    headers: authHeaders(sessionToken),
+  });
+  return handleResponse(res);
+}
+
+/** Clear all activity logs for the authenticated user */
+export async function apiClearActivityLogs(
+  sessionToken: string
+): Promise<void> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/activity`, {
+    method: "DELETE",
+    headers: authHeaders(sessionToken),
+  });
+  await handleResponse(res);
+}
+
 /** Delete all documents in a folder */
 export async function apiDeleteFolderDocuments(
   token: string,
