@@ -44,7 +44,7 @@ export function VerifyEmailInfoModal({ isOpen, onClose }: VerifyEmailInfoModalPr
         </p>
 
         <p className="mt-5 text-sm text-white/70 leading-relaxed">
-          We're activating email verification for your account. You'll be
+          We&apos;re activating email verification for your account. You&apos;ll be
           able to confirm your email address as soon as the service is ready.
         </p>
 
