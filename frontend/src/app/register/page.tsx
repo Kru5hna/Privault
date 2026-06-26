@@ -2,14 +2,18 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context";
 
 export default function RegisterPage() {
   const { register, error, status, clearError, enterSandbox } = useAuth();
+  const router = useRouter();
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
 
   const loading = status === "loading";
 
@@ -34,11 +38,50 @@ export default function RegisterPage() {
     }
 
     try {
-      await register(username.trim(), password);
+      const result = await register(username.trim(), password, email.trim() || undefined);
+      if (result?.email_sent) {
+        setEmailSent(true);
+      } else {
+        router.push("/dashboard");
+      }
     } catch {
       // Error handled by Auth Context
     }
   };
+
+  // Show verification-sent screen
+  if (emailSent) {
+    return (
+      <div className="relative flex min-h-screen flex-col items-center justify-center bg-[#0D0E10] px-4 py-8 sm:px-6 sm:py-12 dotted-grid-dark overflow-hidden">
+        <div className="noise-overlay absolute inset-0 pointer-events-none opacity-30" />
+        <div className="absolute top-1/4 left-1/4 h-72 w-72 rounded-full bg-[#E41613]/5 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 h-72 w-72 rounded-full bg-[#E41613]/5 blur-[120px] pointer-events-none" />
+
+        <div className="relative z-10 w-full max-w-md panel-card p-6 sm:p-10 text-center">
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#E41613]/20">
+            <svg className="h-8 w-8 text-[#E41613]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h1 className="font-serif text-2xl font-bold tracking-[0.15em] text-[#F5F5F0]">CHECK YOUR INBOX</h1>
+          <p className="mt-4 text-sm text-white/50 leading-relaxed">
+            We sent a verification email to <span className="text-white/80 font-semibold">{email}</span>.
+            Click the link in the email to activate your vault.
+          </p>
+          <p className="mt-6 text-xs text-white/30">
+            Didn't receive it? Check your spam folder.
+          </p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="btn-primary mt-8 w-full border-none cursor-pointer"
+          >
+            <span className="btn-bg" />
+            <span className="btn-text">GO TO VAULT</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-[#0D0E10] px-4 py-8 sm:px-6 sm:py-12 dotted-grid-dark overflow-hidden">
       {/* Floating back link */}
@@ -101,6 +144,24 @@ export default function RegisterPage() {
               onChange={(e) => setUsername(e.target.value)}
               className="w-full input-tactical"
               placeholder="Enter username"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="register-email"
+              className="block text-micro font-semibold text-white/50 mb-2"
+            >
+              Email <span className="text-white/20">(for updates &amp; recovery)</span>
+            </label>
+            <input
+              id="register-email"
+              type="email"
+              disabled={loading}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full input-tactical"
+              placeholder="you@example.com"
             />
           </div>
 
