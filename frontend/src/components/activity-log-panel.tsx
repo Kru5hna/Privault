@@ -41,7 +41,10 @@ export function ActivityLogPanel({ sessionToken }: ActivityLogPanelProps) {
   }, [sessionToken]);
 
   useEffect(() => {
-    loadLogs();
+    const timer = setTimeout(() => {
+      void loadLogs();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [loadLogs]);
 
   const handleClearLogs = async () => {
