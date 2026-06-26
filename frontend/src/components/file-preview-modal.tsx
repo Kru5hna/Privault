@@ -1,8 +1,9 @@
 "use client";
 
-import React, { Suspense, useEffect, useCallback, useRef } from "react";
+import React, { Suspense, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Loader2, ShieldCheck, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
 
 const AdvancedViewer = dynamic(
   () => import("./advanced-viewer").then((mod) => ({ default: mod.AdvancedViewer })),
@@ -61,19 +62,17 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes, onPrev,
   };
   const mimeType = mimeMap[ext] || "application/octet-stream";
 
-  const containerRef = useRef<HTMLDivElement>(null);
-
+  // ESC is handled by the shared Modal. We only own arrow-key navigation
+  // here since that's specific to multi-file preview paging.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      onClose();
-    } else if (e.key === "ArrowLeft" && hasPrev && onPrev) {
+    if (e.key === "ArrowLeft" && hasPrev && onPrev) {
       e.preventDefault();
       onPrev();
     } else if (e.key === "ArrowRight" && hasNext && onNext) {
       e.preventDefault();
       onNext();
     }
-  }, [onClose, onPrev, onNext, hasPrev, hasNext]);
+  }, [onPrev, onNext, hasPrev, hasNext]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -84,9 +83,16 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes, onPrev,
   if (!isOpen) return null;
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 sm:p-8 backdrop-blur-md">
-      <div className="w-full h-full max-w-6xl flex flex-col bg-[#15161A] border border-white/10 rounded overflow-hidden shadow-2xl relative">
-        
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="full"
+      zIndex={100}
+      noPadding
+      data-testid="file-preview-modal"
+    >
+      <div className="w-full h-full max-w-[min(96vw,1600px)] h-[min(92vh,1000px)] flex flex-col bg-[#15161A] border border-white/10 rounded overflow-hidden shadow-2xl relative">
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/20 shrink-0">
           <div className="flex items-center gap-3">
@@ -98,12 +104,6 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes, onPrev,
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="text-white/50 hover:text-[#E41613] transition-colors p-2 -mr-2 cursor-pointer"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {/* Content Viewport */}
@@ -144,7 +144,7 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes, onPrev,
                   Processing cryptographic blocks inside in-memory sandbox.
                 </span>
               </div>
-              
+
               {/* Tactical Skeleton Loader Mock */}
               <div className="w-64 space-y-2 mt-6">
                 <div className="h-4 bg-white/5 animate-pulse rounded w-full" />
@@ -160,7 +160,7 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes, onPrev,
                   <span className="text-xs tracking-widest uppercase text-white/30">LOADING VIEWER...</span>
                 </div>
               }>
-                <AdvancedViewer 
+                <AdvancedViewer
                   fileName={fileName}
                   fileBytes={fileBytes}
                   mimeType={mimeType}
@@ -171,6 +171,6 @@ export function FilePreviewModal({ isOpen, onClose, fileName, fileBytes, onPrev,
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
