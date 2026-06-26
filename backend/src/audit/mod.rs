@@ -64,6 +64,8 @@ pub const EVENT_RECOVERY_PHRASE_GENERATED: &str = "recovery_phrase_generated";
 pub const EVENT_RECOVERY_KEY_STORED: &str = "recovery_key_stored";
 pub const EVENT_RECOVERED: &str = "recovered";
 pub const EVENT_PASSWORD_RESET: &str = "password_reset";
+pub const EVENT_PASSWORD_CHANGED: &str = "password_changed";
+pub const EVENT_ACCOUNT_DELETED: &str = "account_deleted";
 
 /// Resource type constants
 pub const RESOURCE_DOCUMENT: &str = "document";
