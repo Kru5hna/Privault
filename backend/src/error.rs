@@ -12,6 +12,7 @@ use serde_json::json;
 ///
 /// Internal details (DB queries, stack traces) are logged server-side
 /// but never leaked to the client.
+#[derive(Debug)]
 pub enum AppError {
     BadRequest(String),       // 400 — validation failures, malformed input
     Unauthorized(String),     // 401 — missing/invalid/expired session
