@@ -36,8 +36,11 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
-    // Load environment variables from .env file
-    dotenvy::dotenv().ok();
+    // Load environment variables from .env file.
+    // If running from the workspace root, fallback to loading backend/.env.
+    if dotenvy::dotenv().is_err() {
+        dotenvy::from_path("backend/.env").ok();
+    }
 
     // Initialize structured logging
     tracing_subscriber::registry()
