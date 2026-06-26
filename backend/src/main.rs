@@ -1,6 +1,7 @@
 mod auth;
 mod audit;
 mod documents;
+mod email;
 mod error;
 mod folders;
 mod ratelimit;
@@ -9,6 +10,7 @@ mod shares;
 mod storage;
 mod tags;
 mod trash;
+mod usage;
 
 use axum::{routing::get, Json, Router};
 use std::net::SocketAddr;
@@ -19,12 +21,14 @@ use crate::auth::AuthSession;
 use crate::error::AppError;
 use crate::storage::StorageService;
 use axum::http::HeaderValue;
+use sqlx::Row;
 
 /// Shared application state — passed to all handlers via Axum's State extractor.
 #[derive(Clone)]
 pub struct AppState {
     pub db: sqlx::PgPool,
     pub storage: StorageService,
+    pub email: email::EmailService,
 }
 
 #[tokio::main]
@@ -66,9 +70,15 @@ async fn main() {
     let bucket_name = std::env::var("AWS_BUCKET_NAME").expect("AWS_BUCKET_NAME must be set");
     let storage = StorageService::new(s3_client, bucket_name);
 
+    // SES uses the same AWS config as S3 — no extra key needed
+    let from_email = std::env::var("FROM_EMAIL").unwrap_or_else(|_| "noreply@privault.app".to_string());
+    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let email = email::EmailService::new(&aws_config, from_email, frontend_url);
+
     let state = AppState {
         db: db_pool,
         storage,
+        email,
     };
 
     // Run trash cleanup on startup
@@ -98,6 +108,7 @@ async fn main() {
         .route("/", get(root))
         .route("/api/health", get(health_check))
         .route("/api/me", get(get_me))
+        .route("/api/me/usage", get(usage::get_usage))
         .nest("/api/auth", auth::router())
         .nest("/api/recovery", recovery::router())
         .nest("/api/documents", documents::router())
@@ -106,8 +117,14 @@ async fn main() {
         .nest("/api/tags", tags::router())
         .nest("/api/trash", trash::router())
         .with_state(state)
-        .layer(cors)
-        .layer(axum::extract::DefaultBodyLimit::max(100 * 1024 * 1024));
+        .layer(cors);
+    let max_upload_bytes: usize = std::env::var("MAX_UPLOAD_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(100 * 1024 * 1024);
+    tracing::info!("Max upload size set to {} MB", max_upload_bytes / (1024 * 1024));
+
+    let app = app.layer(axum::extract::DefaultBodyLimit::max(max_upload_bytes));
 
     // Bind and serve
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
@@ -136,11 +153,27 @@ async fn health_check(
 /// Protected route — returns the authenticated user's profile.
 /// The `AuthSession` parameter IS the middleware: if the session token is
 /// missing, invalid, or expired, Axum returns 401 and this function never runs.
-async fn get_me(session: AuthSession) -> Json<serde_json::Value> {
-    Json(serde_json::json!({
+async fn get_me(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    session: AuthSession,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let row = sqlx::query(
+        "SELECT email, email_verified FROM users WHERE id = $1",
+    )
+    .bind(session.user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+
+    let email: Option<String> = row.get("email");
+    let email_verified: bool = row.get("email_verified");
+
+    Ok(Json(serde_json::json!({
         "user_id": session.user_id.to_string(),
-        "username": session.username
-    }))
+        "username": session.username,
+        "email": email,
+        "email_verified": email_verified,
+    })))
 }
 
 async fn root() -> Json<serde_json::Value> {
