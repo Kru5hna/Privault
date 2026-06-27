@@ -67,7 +67,7 @@ export function SharedLinksPanel({ user, privateKey }: SharedLinksPanelProps) {
         console.error("Failed to decrypt link key:", err);
         navigator.clipboard.writeText(url);
         setCopiedId(share.id);
-        toast.warn("Copied link without key (decryption failed)");
+        toast.warning("Copied link without key (decryption failed)");
       }
     } else {
       navigator.clipboard.writeText(url);
