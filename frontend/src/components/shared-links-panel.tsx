@@ -20,12 +20,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activity";
+import { decryptOwnerLinkKey } from "@/lib/crypto";
 
 interface SharedLinksPanelProps {
   user: UserSession | null;
+  privateKey: CryptoKey | null;
 }
 
-export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
+export function SharedLinksPanel({ user, privateKey }: SharedLinksPanelProps) {
   const [shares, setShares] = useState<ShareLinkMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -50,15 +52,44 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
     }, 0);
   }, [loadShares]);
 
-  const handleCopyLink = (shareId: string) => {
+  const handleCopyLink = async (share: ShareLinkMetadata) => {
     const origin = window.location.origin;
-    // Note: we can't reconstruct the full link with the key since the key is only
-    // known at creation time. We copy the base link without the hash fragment.
-    const url = `${origin}/share/${shareId}`;
-    navigator.clipboard.writeText(url);
-    setCopiedId(shareId);
-    toast.info("Link copied (without decryption key — the key was only shown at creation time)");
+    let url = `${origin}/share/${share.id}`;
+
+    if (privateKey && share.owner_encrypted_link_key) {
+      try {
+        const decryptedData = await decryptOwnerLinkKey(share.owner_encrypted_link_key, privateKey);
+        url = `${origin}/share/${share.id}#${decryptedData.linkKey}:${decryptedData.permission}`;
+        navigator.clipboard.writeText(url);
+        setCopiedId(share.id);
+        toast.success("Share link copied to clipboard");
+      } catch (err) {
+        console.error("Failed to decrypt link key:", err);
+        navigator.clipboard.writeText(url);
+        setCopiedId(share.id);
+        toast.warn("Copied link without key (decryption failed)");
+      }
+    } else {
+      navigator.clipboard.writeText(url);
+      setCopiedId(share.id);
+      toast.info("Link copied without decryption key (legacy format)");
+    }
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleOpenLink = async (share: ShareLinkMetadata) => {
+    const origin = window.location.origin;
+    let url = `${origin}/share/${share.id}`;
+
+    if (privateKey && share.owner_encrypted_link_key) {
+      try {
+        const decryptedData = await decryptOwnerLinkKey(share.owner_encrypted_link_key, privateKey);
+        url = `${origin}/share/${share.id}#${decryptedData.linkKey}:${decryptedData.permission}`;
+      } catch (err) {
+        console.error("Failed to decrypt link key:", err);
+      }
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleRevoke = async (shareId: string) => {
@@ -218,9 +249,9 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2 shrink-0">
                       <button
-                        onClick={() => handleCopyLink(share.id)}
+                        onClick={() => handleCopyLink(share)}
                         className="p-2 border border-white/10 hover:border-white/20 text-[#8E929F] hover:text-white bg-white/[0.02] hover:bg-white/5 transition-colors cursor-pointer"
-                        title="Copy share link (without decryption key)"
+                        title="Copy share link (with decryption key)"
                       >
                         {copiedId === share.id ? (
                           <Check size={14} className="text-green-400" />
@@ -228,15 +259,13 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
                           <Copy size={14} />
                         )}
                       </button>
-                      <a
-                        href={`/share/${share.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => handleOpenLink(share)}
                         className="p-2 border border-white/10 hover:border-white/20 text-[#8E929F] hover:text-white bg-white/[0.02] hover:bg-white/5 transition-colors cursor-pointer inline-flex"
                         title="Open share page"
                       >
                         <ExternalLink size={14} />
-                      </a>
+                      </button>
                       <button
                         onClick={() => handleRevoke(share.id)}
                         className="p-2 border border-red-500/20 hover:border-red-500/40 text-[#8E929F] hover:text-red-400 bg-red-500/[0.02] hover:bg-red-500/10 transition-colors cursor-pointer"
@@ -255,13 +284,10 @@ export function SharedLinksPanel({ user }: SharedLinksPanelProps) {
 
       {/* Security Notice */}
       {shares.length > 0 && (
-        <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-500/20 p-4">
-          <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
-          <p className="text-[11px] text-amber-400/70 leading-relaxed">
-            <strong className="text-amber-400">Note:</strong> The decryption key is only
-            included in the share link at creation time. Copying from this panel copies the
-            link <em>without</em> the key. To share a file securely, generate a new share
-            link from the document&apos;s Share modal.
+        <div className="flex items-start gap-3 bg-[#E41613]/5 border border-[#E41613]/10 p-4">
+          <AlertTriangle size={14} className="text-[#E41613] mt-0.5 shrink-0" />
+          <p className="text-[11px] text-[#8E929F] leading-relaxed">
+            <strong className="text-white">Note:</strong> Copying or opening links from this panel automatically reconstructs the full secure URL with the decryption key using your browser-session private key. Legacy links created under older versions cannot be decrypted and will be copied without the key.
           </p>
         </div>
       )}

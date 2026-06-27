@@ -1043,7 +1043,7 @@ export default function DashboardPage() {
 
         {viewMode === "shares" && (
           <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
-            <SharedLinksPanel user={user} />
+            <SharedLinksPanel user={user} privateKey={privateKey} />
           </main>
         )}
 
