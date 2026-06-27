@@ -1,4 +1,4 @@
-# 🛡️ Privault — Zero-Knowledge Encrypted Document Vault
+# 🛡️ Privault : Zero-Knowledge Encrypted Document Vault
 
 **Your files, your keys. The server never sees plaintext.**
 
@@ -22,8 +22,6 @@ Built with Rust (Axum) + Next.js, powered by the Web Crypto API.
 - [Project Structure](#-project-structure)
 - [API Overview](#-api-overview)
 - [Getting Started](#-getting-started)
-- [Production Checklist](#-production-checklist)
-- [Roadmap](#-roadmap)
 - [License](#-license)
 
 ---
