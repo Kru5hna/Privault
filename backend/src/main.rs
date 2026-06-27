@@ -81,10 +81,11 @@ async fn main() {
     let bucket_name = std::env::var("AWS_BUCKET_NAME").expect("AWS_BUCKET_NAME must be set");
     let storage = StorageService::new(s3_client, bucket_name);
 
-    // SES uses the same AWS config as S3 — no extra key needed
-    let from_email = std::env::var("FROM_EMAIL").unwrap_or_else(|_| "noreply@privault.app".to_string());
+    // Resend email service
+    let resend_api_key = std::env::var("RESEND_API_KEY").expect("RESEND_API_KEY must be set");
+    let from_email = std::env::var("FROM_EMAIL").unwrap_or_else(|_| "mail@localprivault.com".to_string());
     let frontend_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
-    let email = email::EmailService::new(&aws_config, from_email, frontend_url);
+    let email = email::EmailService::new(resend_api_key, from_email, frontend_url);
 
     let state = AppState {
         db: db_pool,

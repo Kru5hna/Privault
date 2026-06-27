@@ -1,21 +1,28 @@
-use aws_sdk_sesv2::{
-    types::{Body, Content, Destination, EmailContent, Message},
-    Client as SesClient,
-};
+use reqwest::Client;
+use serde::Serialize;
 
 #[derive(Clone)]
 pub struct EmailService {
-    client: SesClient,
+    client: Client,
+    api_key: String,
     from_email: String,
     frontend_url: String,
 }
 
+#[derive(Serialize)]
+struct ResendPayload {
+    from: String,
+    to: Vec<String>,
+    subject: String,
+    html: String,
+}
+
 impl EmailService {
-    /// Build the service from an already-loaded AWS config.
-    /// Pass the same `aws_config::SdkConfig` you use for S3 — same region/credentials.
-    pub fn new(aws_cfg: &aws_config::SdkConfig, from_email: String, frontend_url: String) -> Self {
+    /// Build the service from a Resend API key.
+    pub fn new(api_key: String, from_email: String, frontend_url: String) -> Self {
         Self {
-            client: SesClient::new(aws_cfg),
+            client: Client::new(),
+            api_key,
             from_email,
             frontend_url,
         }
@@ -45,37 +52,30 @@ impl EmailService {
     }
 
     async fn send_email(&self, to: &str, subject: &str, html: &str) -> Result<(), String> {
-        let dest = Destination::builder().to_addresses(to).build();
+        let payload = ResendPayload {
+            from: self.from_email.clone(),
+            to: vec![to.to_string()],
+            subject: subject.to_string(),
+            html: html.to_string(),
+        };
 
-        let subject_content = Content::builder()
-            .data(subject)
-            .charset("UTF-8")
-            .build()
-            .map_err(|e| format!("Bad subject: {}", e))?;
-
-        let html_content = Content::builder()
-            .data(html)
-            .charset("UTF-8")
-            .build()
-            .map_err(|e| format!("Bad body: {}", e))?;
-
-        let body = Body::builder().html(html_content).build();
-
-        let message = Message::builder()
-            .subject(subject_content)
-            .body(body)
-            .build();
-
-        let email_content = EmailContent::builder().simple(message).build();
-
-        self.client
-            .send_email()
-            .from_email_address(&self.from_email)
-            .destination(dest)
-            .content(email_content)
+        let response = self
+            .client
+            .post("https://api.resend.com/emails")
+            .bearer_auth(&self.api_key)
+            .json(&payload)
             .send()
             .await
-            .map_err(|e| format!("SES send error: {}", e))?;
+            .map_err(|e| format!("Resend request error: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "no body".to_string());
+            return Err(format!("Resend API error ({}): {}", status, body));
+        }
 
         Ok(())
     }
@@ -154,6 +154,6 @@ Need help? Reply to this email or check the docs.<br>
 </body>
 </html>"#,
         username = username,
-        dashboard_url = "https://privault-three.vercel.app/dashboard",
+        dashboard_url = "https://localprivault.com/dashboard",
     )
 }
