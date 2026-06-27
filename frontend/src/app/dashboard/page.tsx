@@ -388,7 +388,7 @@ export default function DashboardPage() {
         ? await decryptFileInWorker(ciphertext, doc.encrypted_dek, privateKey)
         : await decryptFile(ciphertext, doc.encrypted_dek, privateKey);
       setPreviewBytes(decryptedBytes);
-      logActivity(user.sessionToken, "Preview", `Previewed file: ${doc.name}`);
+
     } catch (err: unknown) {
       toast.error(`Preview failed: ${err instanceof Error ? err.message : "Unknown"}`);
       setPreviewDoc(null);

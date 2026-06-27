@@ -95,6 +95,20 @@ async fn main() {
     // Run trash cleanup on startup
     trash::cleanup_expired_trash(&state).await;
 
+    // Purge legacy "Preview" activity entries — previews are no longer tracked
+    let deleted = sqlx::query("DELETE FROM activity_logs WHERE action = 'Preview'")
+        .execute(&state.db)
+        .await;
+    match deleted {
+        Ok(result) => {
+            let count = result.rows_affected();
+            if count > 0 {
+                tracing::info!("Purged {count} legacy Preview activity log entries");
+            }
+        }
+        Err(e) => tracing::warn!("Failed to purge Preview activity logs: {e}"),
+    }
+
     // CORS — explicit allowlists only. No `*` wildcard for any
     // field. If `CORS_ORIGIN` is unset, fail-closed to localhost.
     let cors_origin = std::env::var("CORS_ORIGIN")

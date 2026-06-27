@@ -29,7 +29,7 @@ pub async fn get_activity(
     session: AuthSession,
 ) -> Result<Json<ActivityLogListResponse>, AppError> {
     let rows = sqlx::query(
-        "SELECT id, action, details, created_at FROM activity_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500",
+        "SELECT id, action, details, created_at FROM activity_logs WHERE user_id = $1 AND action != 'Preview' ORDER BY created_at DESC LIMIT 500",
     )
     .bind(session.user_id)
     .fetch_all(&state.db)

@@ -10,7 +10,6 @@ import {
   History,
   Upload,
   Download,
-  Eye,
   Link2,
   Trash2,
   RefreshCw,
@@ -60,8 +59,7 @@ export function ActivityLogPanel({ sessionToken }: ActivityLogPanelProps) {
         return <Upload size={14} className="text-blue-400" />;
       case "Download":
         return <Download size={14} className="text-green-400" />;
-      case "Preview":
-        return <Eye size={14} className="text-purple-400" />;
+
       case "Share created":
         return <Link2 size={14} className="text-amber-400" />;
       case "Share revoked":
@@ -92,7 +90,7 @@ export function ActivityLogPanel({ sessionToken }: ActivityLogPanelProps) {
   };
 
   const filterOptions = [
-    "All", "Upload", "Download", "Preview", "Share created", "Share revoked", "Restore", "Delete"
+    "All", "Upload", "Download", "Share created", "Share revoked", "Restore", "Delete"
   ];
 
   return (

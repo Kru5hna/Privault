@@ -1,6 +1,6 @@
 import { apiLogActivity, apiGetActivityLogs, apiClearActivityLogs } from "./api";
 
-export type ActivityAction = "Upload" | "Download" | "Preview" | "Share created" | "Share revoked" | "Restore" | "Delete";
+export type ActivityAction = "Upload" | "Download" | "Share created" | "Share revoked" | "Restore" | "Delete";
 
 export interface ActivityLogEntry {
   id: string;
