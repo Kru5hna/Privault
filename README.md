@@ -287,20 +287,6 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-
-## 🗺️ Roadmap
-
-Privault is actively developed. Upcoming work:
-
-- **Desktop client (Tauri)** — native desktop app with the same Web Crypto foundation, system-tray integration, and offline-first sync
-- **Browser extension** — encrypt files in Gmail, Drive, Notion before they leave the page
-- **Team vaults** — shared encrypted workspaces with role-based access
-- **Audit log export** — signed, downloadable activity history
-- **CLI companion** — encrypt and decrypt files from the terminal
-- **Recovery v2** — optional social / Shamir's secret sharing recovery flows
-
----
-
 ## 📜 License
 
 [MIT](LICENSE) — Copyright (c) 2026 Krushna Raut.
