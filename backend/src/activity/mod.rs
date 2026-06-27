@@ -1,7 +1,7 @@
 mod handlers;
 mod models;
 
-use axum::routing::{delete, get, post};
+use axum::routing::post;
 use axum::Router;
 
 pub fn router() -> Router<crate::AppState> {
