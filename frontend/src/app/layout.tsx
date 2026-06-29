@@ -4,6 +4,7 @@ import { AuthProvider } from "@/app/context";
 import { QueryProvider } from "@/lib/query-provider";
 import UnlockModal from "@/components/unlock-modal";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -54,6 +55,7 @@ export default function RootLayout({
             {children}
             <UnlockModal />
             <Toaster theme="dark" position="bottom-right" />
+            <Analytics />
           </AuthProvider>
         </QueryProvider>
       </body>
